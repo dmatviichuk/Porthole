@@ -1,0 +1,5 @@
+# Take new releases as soon as they are published.
+minimumReleaseAge: 0
+
+# Running any script on a fresh or stale checkout installs dependencies first.
+verifyDepsBeforeRun: install

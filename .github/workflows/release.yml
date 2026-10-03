@@ -1,0 +1,144 @@
+name: Release
+
+# Release the version in package.json: from the Actions tab ("Run workflow" on `development`),
+# or by pushing a matching tag (e.g. v1.1.0). One draft release is created up front, every
+# platform uploads into it, and it is published only when all builds succeeded.
+#
+# Caches: GitHub shares caches from the default branch with every later run, but never shares
+# what a tag-triggered run saves. Runs started from `development` therefore save the build
+# caches the next release starts from; tag runs restore them but cannot save.
+# "Run workflow" with `publish` off builds every platform without releasing, which also
+# warms the caches after a dependency update.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish a release (off builds every platform without releasing)
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+
+jobs:
+  draft:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release-id: ${{ steps.release.outputs.id }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - id: release
+        if: github.event_name == 'push' || inputs.publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq ".[] | select(.tag_name == \"$tag\") | .id" | head -n 1)
+          if [ -z "$id" ]; then
+            notes=$(cat <<'NOTES'
+          Downloads:
+          - macOS: `.dmg` (`aarch64` for Apple silicon, `x64` for Intel)
+          - Windows: `.msi` or `-setup.exe`
+          - Linux: `.AppImage`, `.deb` or `.rpm`
+
+          The builds are not code-signed yet. On macOS, after copying the app to Applications, run
+          `xattr -dr com.apple.quarantine /Applications/Porthole.app` once.
+          NOTES
+            )
+            id=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
+              -f tag_name="$tag" -f name="Porthole $tag" -f target_commitish="$GITHUB_SHA" \
+              -f body="$notes" -F draft=true --jq .id)
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: draft
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple silicon)
+            runner: macos-latest
+            target: aarch64-apple-darwin
+          - name: macOS (Intel)
+            runner: macos-latest
+            target: x86_64-apple-darwin
+          - name: Linux
+            runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - name: Windows
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      # Plain apt here, not a cache action: this job holds a token that can publish releases,
+      # so it runs no third-party code beyond the build itself. CI caches these packages.
+      - name: Install WebKitGTK and friends
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm # the pnpm store, keyed by pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      # Compiled release dependencies per target, keyed by Cargo.lock (see the note at the top).
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.target }}
+          save-if: ${{ github.ref == 'refs/heads/development' }}
+          cache-on-failure: true
+      # Packaging tools Tauri downloads on first use: linuxdeploy and the AppImage plugins on
+      # Linux, WiX and NSIS on Windows.
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/tauri
+            ~/AppData/Local/tauri
+          key: tauri-bundler-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: tauri-bundler-${{ runner.os }}-
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm icons
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: pnpm tauri
+          args: --target ${{ matrix.target }}
+          # Empty when not publishing: tauri-action then only builds, and the bundles are kept
+          # as workflow artifacts instead.
+          releaseId: ${{ needs.draft.outputs.release-id }}
+          uploadWorkflowArtifacts: ${{ needs.draft.outputs.release-id == '' }}
+
+  publish:
+    needs: [draft, build]
+    if: needs.draft.outputs.release-id != ''
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.draft.outputs.release-id }}
+        run: gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false --jq .html_url

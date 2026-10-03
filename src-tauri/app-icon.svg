@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a2c33" />
+      <stop offset="1" stop-color="#0f1013" />
+    </linearGradient>
+    <linearGradient id="rim" x1="0.15" y1="0.1" x2="0.85" y2="0.95">
+      <stop offset="0" stop-color="#f0c66e" />
+      <stop offset="0.45" stop-color="#c48a35" />
+      <stop offset="1" stop-color="#7a4b16" />
+    </linearGradient>
+    <linearGradient id="lip" x1="0.85" y1="0.95" x2="0.15" y2="0.1">
+      <stop offset="0" stop-color="#e9b860" />
+      <stop offset="1" stop-color="#6b4012" />
+    </linearGradient>
+    <radialGradient id="glass" cx="0.42" cy="0.36" r="0.75">
+      <stop offset="0" stop-color="#1d3f6b" />
+      <stop offset="1" stop-color="#07111f" />
+    </radialGradient>
+    <radialGradient id="bolt" cx="0.35" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#f7dc9c" />
+      <stop offset="1" stop-color="#8a5a1e" />
+    </radialGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6aaeff" />
+      <stop offset="1" stop-color="#2f6fe0" />
+    </linearGradient>
+    <clipPath id="window">
+      <circle cx="512" cy="512" r="236" />
+    </clipPath>
+  </defs>
+  <!-- Body inset to the macOS icon grid (824 of 1024). -->
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#body)" />
+  <rect x="100.5" y="100.5" width="823" height="823" rx="185.5" fill="none" stroke="#ffffff" stroke-opacity="0.08" />
+
+  <!-- The porthole: a brass rim with eight bolts around a round window. -->
+  <circle cx="512" cy="512" r="330" fill="#000000" fill-opacity="0.35" transform="translate(0 10)" />
+  <circle cx="512" cy="512" r="330" fill="url(#rim)" />
+  <circle cx="512" cy="512" r="329" fill="none" stroke="#3b2408" stroke-width="2" stroke-opacity="0.6" />
+  <circle cx="512" cy="512" r="256" fill="url(#lip)" />
+  <g fill="url(#bolt)" stroke="#4a2c0a" stroke-width="3">
+    <circle cx="512" cy="219" r="21" />
+    <circle cx="719" cy="305" r="21" />
+    <circle cx="805" cy="512" r="21" />
+    <circle cx="719" cy="719" r="21" />
+    <circle cx="512" cy="805" r="21" />
+    <circle cx="305" cy="719" r="21" />
+    <circle cx="219" cy="512" r="21" />
+    <circle cx="305" cy="305" r="21" />
+  </g>
+
+  <!-- Through the glass: the cluster, as three stacked layers (cluster, nodes, workloads). -->
+  <circle cx="512" cy="512" r="236" fill="url(#glass)" />
+  <g clip-path="url(#window)">
+    <path d="M512 520 L662 595 L512 670 L362 595 Z" fill="#3cc97c" />
+    <path d="M512 442 L662 517 L512 592 L362 517 Z" fill="#11161f" />
+    <path d="M512 442 L662 517 L512 592 L362 517 Z" fill="#8e8e97" fill-opacity="0.85" />
+    <path d="M512 364 L662 439 L512 514 L362 439 Z" fill="#11161f" />
+    <path d="M512 364 L662 439 L512 514 L362 439 Z" fill="url(#top)" />
+    <!-- Glare on the glass. -->
+    <path d="M330 420 A200 200 0 0 1 470 300" fill="none" stroke="#ffffff" stroke-opacity="0.22" stroke-width="22" stroke-linecap="round" />
+  </g>
+  <circle cx="512" cy="512" r="236" fill="none" stroke="#000000" stroke-opacity="0.45" stroke-width="10" />
+</svg>
