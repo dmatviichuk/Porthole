@@ -21,6 +21,7 @@
     "lint": "oxlint",
     "test": "vitest run",
     "check": "pnpm icons && tsc && oxlint && vitest run && cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml",
+    "clean": "node scripts/clean.mjs",
     "tauri": "tauri"
   },
   "dependencies": {

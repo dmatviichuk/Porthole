@@ -5,6 +5,7 @@ Set up the prerequisites from [Building from source](building.md) first.
 ```sh
 pnpm app        # run the app with hot reload (dependencies are optimized, so it runs at full speed)
 pnpm check      # typecheck, lint and unit tests for the UI and the Rust backend
+pnpm clean      # remove every build and cache: Rust target/, dist/, generated icons, Vite caches
 ```
 
 The Rust backend also has an end-to-end test that sets up a namespace, watches pods, follows logs,

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [development]
+    branches: [main]
   pull_request:
 
 permissions:
@@ -45,12 +45,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-      # Compiled dependencies, keyed by Cargo.lock. Only `development` saves, so every pull
+      # Compiled dependencies, keyed by Cargo.lock. Only `main` saves, so every pull
       # request starts from its cache without spending the repository's 10 GB on copies.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          save-if: ${{ github.ref == 'refs/heads/development' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
       - run: pnpm install --frozen-lockfile
       # The Rust build embeds the window icon, so the generated icons must exist first.

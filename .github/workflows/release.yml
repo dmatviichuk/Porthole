@@ -1,11 +1,11 @@
 name: Release
 
-# Release the version in package.json: from the Actions tab ("Run workflow" on `development`),
+# Release the version in package.json: from the Actions tab ("Run workflow" on `main`),
 # or by pushing a matching tag (e.g. v1.1.0). One draft release is created up front, every
 # platform uploads into it, and it is published only when all builds succeeded.
 #
 # Caches: GitHub shares caches from the default branch with every later run, but never shares
-# what a tag-triggered run saves. Runs started from `development` therefore save the build
+# what a tag-triggered run saves. Runs started from `main` therefore save the build
 # caches the next release starts from; tag runs restore them but cannot save.
 # "Run workflow" with `publish` off builds every platform without releasing, which also
 # warms the caches after a dependency update.
@@ -108,7 +108,7 @@ jobs:
         with:
           workspaces: src-tauri
           key: ${{ matrix.target }}
-          save-if: ${{ github.ref == 'refs/heads/development' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
       # Packaging tools Tauri downloads on first use: linuxdeploy and the AppImage plugins on
       # Linux, WiX and NSIS on Windows.
