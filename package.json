@@ -1,7 +1,7 @@
 {
   "name": "porthole",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Desktop client for Kubernetes",
   "author": "Dmytro Matviichuk",
   "license": "Apache-2.0",
