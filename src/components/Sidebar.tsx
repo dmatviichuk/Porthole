@@ -102,6 +102,7 @@ export function Sidebar({ contexts, onReload }: Props) {
   const context = useApp((s) => s.context);
   const namespace = useApp((s) => s.namespace);
   const browseNamespace = useApp((s) => s.browseNamespace);
+  const browseAll = useApp((s) => s.browseAll);
   const navigate = useApp((s) => s.navigate);
   const view = useView();
   const namespaces = useResources(context, NAMESPACE, null);
@@ -117,7 +118,7 @@ export function Sidebar({ contexts, onReload }: Props) {
       <ClusterSwitcher contexts={contexts} onReload={onReload} status={namespaces} />
 
       <nav className="space-y-0.5 px-2.5 pt-4" aria-label="Main">
-        <NavItem icon={<LayoutGrid size={15} />} active={browsing} onClick={() => navigate({ name: "applications" })}>
+        <NavItem icon={<LayoutGrid size={15} />} active={browsing} onClick={browseAll}>
           Browse
         </NavItem>
         <NavItem

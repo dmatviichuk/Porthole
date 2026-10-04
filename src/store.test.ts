@@ -37,3 +37,27 @@ describe("browseNamespace", () => {
     expect([useApp.getState().namespace, view()]).toEqual([null, { name: "applications" }]);
   });
 });
+
+describe("browseAll", () => {
+  beforeEach(() => useApp.setState({ context: "dev" }));
+
+  it("returns to Applications across all namespaces from a page in a namespace", () => {
+    const resourcePage: View = { name: "resource", resource: DEPLOYMENT, namespace: "shop", object: "web", tab: "overview" };
+    for (const current of [resourcePage, { name: "resources", resource: null }, { name: "overview" }] satisfies View[]) {
+      start(current);
+      useApp.setState({ namespace: "shop" });
+      useApp.getState().browseAll();
+      expect([useApp.getState().namespace, view()]).toEqual([null, { name: "applications" }]);
+      useApp.getState().back();
+      expect(view()).toEqual(current);
+    }
+  });
+
+  it("clears the filter and search in place on Applications", () => {
+    start({ name: "applications" });
+    useApp.setState({ namespace: "shop", search: "web" });
+    useApp.getState().browseAll();
+    const { namespace, search, history } = useApp.getState();
+    expect([namespace, search, history.length, view()]).toEqual([null, "", 2, { name: "applications" }]);
+  });
+});

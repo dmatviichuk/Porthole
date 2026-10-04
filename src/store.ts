@@ -54,6 +54,8 @@ type AppState = {
    * views that would otherwise not change (Overview, a resource page).
    */
   browseNamespace: (namespace: string | null) => void;
+  /** Browse in the sidebar: Applications across all namespaces, from wherever you are. */
+  browseAll: () => void;
   setSearch: (search: string) => void;
   navigate: (view: View) => void;
   /** Changes the current view without a history entry (switching tabs of one resource). */
@@ -127,6 +129,11 @@ export const useApp = create<AppState>((set, get) => ({
     const current = history[index]?.name;
     if (current === "applications" || current === "resources") return;
     get().navigate({ name: "applications" });
+  },
+  browseAll: () => {
+    get().setNamespace(null);
+    if (get().history[get().index]?.name === "applications") set({ search: "" });
+    else get().navigate(HOME);
   },
   setSearch: (search) => set({ search }),
   navigate: (view) =>
