@@ -35,6 +35,7 @@ thiserror = "2.0.21"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 serde-saphyr = "1.3.0"
+tauri-plugin-window-state = "2.5.0"
 
 # `pnpm app` runs a debug build. Optimizing the dependencies (built once, then cached) keeps
 # kube and serde about as fast as in a release while our own crate still rebuilds in seconds.

@@ -19,7 +19,7 @@ use kube::{
     runtime::watcher,
 };
 use tauri::{
-    State,
+    Manager, State,
     ipc::{Channel, InvokeResponseBody},
 };
 use tokio::sync::mpsc;
@@ -227,6 +227,18 @@ pub fn run() {
         .init();
 
     tauri::Builder::default()
+        // Remembers the window's size, position, zoom and full screen across launches.
+        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .setup(|app| {
+            // The window starts hidden so the saved size is applied before anyone sees it; the
+            // plugin then shows it. If restoring failed, show it anyway rather than never.
+            if let Some(window) = app.get_webview_window("main")
+                && !window.is_visible().unwrap_or(false)
+            {
+                window.show()?;
+            }
+            Ok(())
+        })
         .manage(Clusters::default())
         .manage(Sessions::default())
         .invoke_handler(tauri::generate_handler![
