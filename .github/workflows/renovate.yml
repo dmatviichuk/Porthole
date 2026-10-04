@@ -1,0 +1,30 @@
+name: Renovate
+
+# Weekly dependency updates, at most two PRs per run (see .github/renovate.json): one with every
+# version update, and one refreshing the indirect dependencies in Cargo.lock and pnpm-lock.yaml.
+#
+# RENOVATE_TOKEN is a fine-grained token for this repository with read and write access to
+# Contents, Pull requests and Workflows. The built-in GITHUB_TOKEN would not do: its PRs do not
+# start CI, and it cannot update the action versions in .github/workflows.
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays, 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: renovatebot/github-action@v46.3.6
+        with:
+          token: ${{ secrets.RENOVATE_TOKEN }}
+        env:
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_ONBOARDING: "false"

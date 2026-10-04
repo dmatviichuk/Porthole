@@ -1,0 +1,21 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "dependencyDashboard": false,
+  "prHourlyLimit": 0,
+  "rangeStrategy": "bump",
+  "separateMajorMinor": false,
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "Every version update in one PR, majors included: npm packages, crates, GitHub Actions and pnpm itself",
+      "matchPackageNames": ["*"],
+      "groupName": "dependencies",
+      "groupSlug": "all"
+    }
+  ],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["at any time"]
+  }
+}

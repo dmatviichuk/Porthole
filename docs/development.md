@@ -15,6 +15,14 @@ opens a shell, edits YAML and deletes everything again. Point it at a disposable
 PORTHOLE_E2E_CONTEXT=<context> cargo test --manifest-path src-tauri/Cargo.toml e2e -- --ignored --nocapture
 ```
 
+## Dependency updates
+
+[Renovate](https://docs.renovatebot.com) runs every Monday, and on demand from the Actions tab, and
+opens at most two PRs: one with every version update, majors included (npm packages, crates,
+GitHub Actions and pnpm itself), and one refreshing the indirect dependencies in the lock files.
+It needs a `RENOVATE_TOKEN` repository secret: a fine-grained token for this repository with read
+and write access to Contents, Pull requests and Workflows.
+
 ## Layout
 
 ```
