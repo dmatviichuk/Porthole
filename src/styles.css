@@ -175,3 +175,9 @@ dialog::backdrop {
   height: 100%;
   padding: 8px 0 0 12px;
 }
+/* xterm 6 paints the theme background on its scrollable element only; the viewport behind it
+   keeps xterm.css's black, which showed in the padding and around the fitted rows. Important
+   because xterm.css arrives with the shell chunk, after this file, with the same selector. */
+.xterm .xterm-viewport {
+  background-color: transparent !important;
+}
