@@ -5,9 +5,9 @@ import { DataTable } from "../components/DataTable";
 import { openResource, resourceMenu } from "../lib/actions";
 import { columnsFor } from "../lib/columns";
 import { cx } from "../lib/cx";
+import { focusPrimary } from "../lib/keys";
 import { matches } from "../lib/format";
 import { filterSections, POD, pluralTitle, sameType, sections, typeKey } from "../lib/kinds";
-import { popupMenu } from "../lib/menu";
 import { useDiscovery } from "../lib/discovery";
 import type { ResourceInfo, ResourceType } from "../lib/types";
 import { useResources } from "../lib/watchStore";
@@ -65,7 +65,13 @@ export function ResourcesView({ resource }: { resource: ResourceType | null }) {
               onKeyDown={(e) => {
                 if (e.key === "Escape") setTypeQuery("");
                 const first = shown[0]?.items[0];
-                if (e.key === "Enter" && first) replace({ name: "resources", resource: first });
+                if (e.key === "Enter" && first) {
+                  replace({ name: "resources", resource: first });
+                  focusPrimary();
+                } else if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  focusPrimary();
+                }
               }}
               placeholder="Find a type"
               aria-label="Find a resource type"
@@ -117,7 +123,9 @@ export function ResourcesView({ resource }: { resource: ResourceType | null }) {
             getRowId={(r) => r.uid}
             initialSort={selected.kind === "Event" ? { id: "lastSeen", desc: false } : { id: "name", desc: false }}
             onOpen={(r) => openResource(selected, r)}
-            onMenu={(r) => void popupMenu(resourceMenu(context, selected, r))}
+            menu={(r) => resourceMenu(context, selected, r)}
+            primary
+            search={search}
             empty={
               !watch.synced
                 ? `Loading ${title.toLowerCase()}…`

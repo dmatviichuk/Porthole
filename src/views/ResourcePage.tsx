@@ -11,8 +11,9 @@ import { appKey, buildApplications } from "../lib/apps";
 import { Age, columnsFor } from "../lib/columns";
 import { cx } from "../lib/cx";
 import { getYaml, saveYaml } from "../lib/ipc";
+import { focusOnMount } from "../lib/keys";
 import { CRONJOB, DAEMONSET, DEPLOYMENT, EVENT, JOB, NODE, POD, REPLICASET, STATEFULSET } from "../lib/kinds";
-import { popupMenu } from "../lib/menu";
+import { type MenuEntry, popupMenu } from "../lib/menu";
 import { podKey, useNodeUsage, usePodUsage } from "../lib/metricsStore";
 import type { ContainerRow, Health, LogTarget, ResourceRow, ResourceType } from "../lib/types";
 import { type Amounts, percent, type PodUsage, utilization } from "../lib/utilization";
@@ -128,7 +129,13 @@ export function ResourcePage({ view }: { view: ResourceView }) {
         ) : tab === "yaml" ? (
           <YamlTab context={context} resource={resource} namespace={namespace} name={object} />
         ) : (
-          <div className="h-full overflow-y-auto px-8 pb-10">
+          <div
+            // The page takes focus so the arrow keys scroll it; Tab goes on to its tables.
+            ref={focusOnMount}
+            tabIndex={-1}
+            data-primary
+            className="h-full overflow-y-auto px-8 pb-10 outline-none"
+          >
             <OverviewTab
               context={context}
               resource={resource}
@@ -323,6 +330,14 @@ function containerHealth(c: ContainerRow): Health {
   return NOT_STARTED.has(c.state) ? "progress" : "failed";
 }
 
+/** A container's menu; L and S run its entries from the focused row. */
+function containerMenu(context: string, pod: ResourceRow, c: ContainerRow): MenuEntry[] {
+  return [
+    { label: "View logs", key: "l", action: () => openResource(POD, pod, "logs") },
+    { label: "Open shell", key: "s", enabled: c.state === "Running", action: () => openShell(context, pod, c.name) },
+  ];
+}
+
 function containerColumns(context: string, pod: ResourceRow, sample: PodUsage | undefined): Column<ContainerRow>[] {
   const metric = (kind: keyof Amounts): Column<ContainerRow> => {
     const get = (c: ContainerRow) => {
@@ -376,19 +391,7 @@ function containerColumns(context: string, pod: ResourceRow, sample: PodUsage | 
       header: "",
       width: "40px",
       sortValue: () => null,
-      cell: (c) => (
-        <RowMenuButton
-          onOpen={(anchor) =>
-            void popupMenu(
-              [
-                { label: "View logs", action: () => openResource(POD, pod, "logs") },
-                { label: "Open shell", enabled: c.state === "Running", action: () => openShell(context, pod, c.name) },
-              ],
-              anchor,
-            )
-          }
-        />
-      ),
+      cell: (c) => <RowMenuButton onOpen={(anchor) => void popupMenu(containerMenu(context, pod, c), anchor)} />,
     },
   ];
 }
@@ -412,12 +415,7 @@ function ContainersTable({ context, pod }: { context: string; pod: ResourceRow }
           getRowId={(c) => c.name}
           rowHeight={44}
           fit
-          onMenu={(c) =>
-            void popupMenu([
-              { label: "View logs", action: () => openResource(POD, pod, "logs") },
-              { label: "Open shell", enabled: c.state === "Running", action: () => openShell(context, pod, c.name) },
-            ])
-          }
+          menu={(c) => containerMenu(context, pod, c)}
           empty="No containers"
         />
       </div>
@@ -558,6 +556,7 @@ function EventsTab({ context, resource, row }: { context: string; resource: Reso
           rows={events.rows}
           getRowId={(r) => r.uid}
           initialSort={{ id: "lastSeen", desc: false }}
+          primary
           empty={events.synced ? "No events. Kubernetes keeps events for about an hour." : "Loading events…"}
         />
       </div>

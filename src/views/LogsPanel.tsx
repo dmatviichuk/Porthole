@@ -161,6 +161,14 @@ export function LogsPanel({ context, targets }: { context: string; targets: LogT
     return () => cancelAnimationFrame(frame);
   }, [revealed, visible.length]);
 
+  // The log area takes focus once it shows (it is hidden until then), so the arrow keys scroll
+  // it, unless focus already went somewhere else.
+  useEffect(() => {
+    if (revealed && (document.activeElement === null || document.activeElement === document.body)) {
+      scrollRef.current?.focus({ preventScroll: true });
+    }
+  }, [revealed]);
+
   const followNow = () => {
     followRef.current = true;
     setFollow(true);
@@ -175,6 +183,12 @@ export function LogsPanel({ context, targets }: { context: string; targets: LogT
             ref={filterRef}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === "ArrowDown" || (e.key === "Escape" && !filter)) {
+                e.preventDefault();
+                scrollRef.current?.focus({ preventScroll: true });
+              } else if (e.key === "Escape") setFilter("");
+            }}
             placeholder="Filter lines"
             aria-label="Filter lines"
             spellCheck={false}
@@ -208,6 +222,8 @@ export function LogsPanel({ context, targets }: { context: string; targets: LogT
       </div>
       <div
         ref={scrollRef}
+        tabIndex={-1}
+        data-primary
         onScroll={(e) => {
           const el = e.currentTarget;
           const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
@@ -215,7 +231,7 @@ export function LogsPanel({ context, targets }: { context: string; targets: LogT
           setFollow(atBottom);
         }}
         style={{ visibility: revealed ? "visible" : "hidden" }}
-        className="selectable relative min-h-0 flex-1 overflow-auto border-t border-line font-mono text-[12px]"
+        className="selectable relative min-h-0 flex-1 overflow-auto border-t border-line font-mono text-[12px] outline-none"
       >
         <div className="relative" style={{ height: virtualizer.getTotalSize(), minWidth: wrap ? undefined : "max-content" }}>
           {virtualizer.getVirtualItems().map((item) => {

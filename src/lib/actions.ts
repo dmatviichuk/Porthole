@@ -14,30 +14,38 @@ export function openShell(context: string, pod: ResourceRow, container: string) 
   useApp.getState().openShell({ context, namespace: pod.namespace ?? "default", pod: pod.name, container });
 }
 
+export function copyName(name: string) {
+  navigator.clipboard.writeText(name).then(
+    () => useApp.getState().notify("ok", `Copied ${name}`),
+    () => useApp.getState().notify("error", `Could not copy ${name}`),
+  );
+}
+
 const kindLabel = (kind: string) => kind.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
 
-/** Right-click menu for any resource row. */
+/** Right-click menu for any resource row; the keyed entries also run from a focused row. */
 export function resourceMenu(context: string, resource: ResourceType | ResourceInfo, row: ResourceRow): MenuEntry[] {
   const canDelete = !("verbs" in resource) || resource.verbs.includes("delete");
   const hasLogs = ["Pod", "Deployment", "StatefulSet", "DaemonSet", "Job", "CronJob", "ReplicaSet"].includes(resource.kind);
   const entries: MenuEntry[] = [{ label: "Open", action: () => openResource(resource, row) }];
-  if (hasLogs) entries.push({ label: "View logs", action: () => openResource(resource, row, "logs") });
+  if (hasLogs) entries.push({ label: "View logs", key: "l", action: () => openResource(resource, row, "logs") });
   if (resource.kind === POD.kind) {
     const running = containersOf(row).filter((c) => c.state === "Running");
     if (running.length === 1 && running[0]) {
       const only = running[0].name;
-      entries.push({ label: "Open shell", action: () => openShell(context, row, only) });
+      entries.push({ label: "Open shell", key: "s", action: () => openShell(context, row, only) });
     } else if (running.length > 1) {
       entries.push({
         label: "Open shell",
+        key: "s",
         items: running.map((c) => ({ label: c.name, action: () => openShell(context, row, c.name) })),
       });
     }
   }
   entries.push(
-    { label: "Edit YAML", action: () => openResource(resource, row, "yaml") },
+    { label: "Edit YAML", key: "y", action: () => openResource(resource, row, "yaml") },
     "separator",
-    { label: "Copy name", action: () => void navigator.clipboard.writeText(row.name) },
+    { label: "Copy name", key: "c", action: () => copyName(row.name) },
     "separator",
     {
       label: `Delete ${kindLabel(resource.kind)}…`,

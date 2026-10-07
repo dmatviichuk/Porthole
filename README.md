@@ -39,6 +39,11 @@ a browser engine: the macOS app is about 10 MB, a 5 MB download.
 - **Cluster labels.** Give any cluster a tag and colour (Production, Staging, a team name) from the
   cluster menu, and optionally require typing the name before every delete on it. Nothing is
   guessed from context names.
+- **Keyboard.** A command palette (⌘K) jumps to any view, resource type, namespace, cluster, shell
+  or object by name. Tables move with the arrow keys or J and K, open with Return, and take L for
+  logs, S for a shell, Y for YAML, C to copy the name and M for the row's menu. ⌘1–3 switch views,
+  Ctrl+Tab switches tabs, Ctrl+` moves between the shells and the view, and ? lists every shortcut
+  (Ctrl in place of ⌘ on Windows and Linux).
 - **Comfort.** Light, dark and auto themes; drag column headers to reorder them (remembered per
   table); resizable sidebar; back and forward navigation; namespace filter; search for resource
   types by kind, short name or API group.

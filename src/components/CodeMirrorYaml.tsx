@@ -106,6 +106,7 @@ export default function CodeMirrorYaml({ value, onChange, onSave }: YamlEditorPr
           theme,
           syntaxHighlighting(highlight),
           EditorState.tabSize.of(2),
+          EditorView.contentAttributes.of({ "data-primary": "" }),
           keymap.of([
             indentWithTab,
             {
@@ -123,6 +124,7 @@ export default function CodeMirrorYaml({ value, onChange, onSave }: YamlEditorPr
       }),
     });
     view.current = editor;
+    editor.focus();
     return () => {
       editor.destroy();
       view.current = null;

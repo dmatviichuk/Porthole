@@ -32,7 +32,12 @@ export function Dock() {
   };
 
   return (
-    <section className="relative flex shrink-0 flex-col border-t border-line bg-bg" style={{ height }} aria-label="Shells">
+    <section
+      data-dock
+      className="relative flex shrink-0 flex-col border-t border-line bg-bg"
+      style={{ height }}
+      aria-label="Shells"
+    >
       <div
         role="separator"
         aria-orientation="horizontal"

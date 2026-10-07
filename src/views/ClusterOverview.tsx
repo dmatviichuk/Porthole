@@ -7,6 +7,7 @@ import { Status } from "../components/Status";
 import { openResource } from "../lib/actions";
 import { Age } from "../lib/columns";
 import { clusterVersion } from "../lib/ipc";
+import { focusOnMount } from "../lib/keys";
 import { NODE, POD } from "../lib/kinds";
 import { useNodeUsage } from "../lib/metricsStore";
 import { type Amounts, type NodeUtilization, percent, utilization } from "../lib/utilization";
@@ -46,7 +47,13 @@ export function ClusterOverview() {
   if (!context) return <Placeholder>Choose a cluster to see its overview.</Placeholder>;
 
   return (
-    <div className="h-full overflow-y-auto px-8 pt-2 pb-10">
+    <div
+      // The page takes focus so the arrow keys scroll it; Tab goes on to its tables.
+      ref={focusOnMount}
+      tabIndex={-1}
+      data-primary
+      className="h-full overflow-y-auto px-8 pt-2 pb-10 outline-none"
+    >
       {nodes.error || pods.error ? (
         <Banner>{nodes.error ?? pods.error}</Banner>
       ) : (

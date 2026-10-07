@@ -98,7 +98,7 @@ export default function ShellView({ shell, visible }: { shell: ShellTab; visible
   }, []);
 
   return (
-    <div className={cx("absolute inset-0", !visible && "invisible")} aria-hidden={!visible}>
+    <div data-shell={shell.key} className={cx("absolute inset-0", !visible && "invisible")} aria-hidden={!visible}>
       <div ref={host} className="h-full" />
       {ended && <span className="sr-only">Shell ended</span>}
     </div>

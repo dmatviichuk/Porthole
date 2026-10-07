@@ -1,8 +1,9 @@
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useRef } from "react";
 
 import { cx } from "../lib/cx";
-import { openFind, useFind } from "../lib/find";
+import { useFind } from "../lib/find";
+import { focusPrimary, MOD } from "../lib/keys";
 import { type ResourceTab, useApp, useView, type View } from "../store";
 
 const LOG_KINDS = new Set(["Pod", "Deployment", "StatefulSet", "DaemonSet", "Job", "CronJob", "ReplicaSet"]);
@@ -14,24 +15,6 @@ export function TopBar() {
   const back = useApp((s) => s.back);
   const forward = useApp((s) => s.forward);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!e.metaKey && !e.ctrlKey) return;
-      if (e.key === "f") {
-        // The YAML editor opens its own search panel when it has focus.
-        if (!e.defaultPrevented && openFind()) e.preventDefault();
-      } else if (e.key === "[") {
-        e.preventDefault();
-        useApp.getState().back();
-      } else if (e.key === "]") {
-        e.preventDefault();
-        useApp.getState().forward();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
   const searchable = view.name === "applications" || view.name === "resources";
 
   return (
@@ -39,10 +22,10 @@ export function TopBar() {
     // like a native title bar; the buttons, tabs and search inside stay clickable.
     <header data-tauri-drag-region="deep" className="grid h-[52px] shrink-0 grid-cols-[1fr_auto_1fr] items-center px-4">
       <div className="flex items-center gap-1">
-        <IconButton label="Back" disabled={!canBack} onClick={back}>
+        <IconButton label="Back" shortcut={`${MOD}[`} disabled={!canBack} onClick={back}>
           <ChevronLeft size={17} />
         </IconButton>
-        <IconButton label="Forward" disabled={!canForward} onClick={forward}>
+        <IconButton label="Forward" shortcut={`${MOD}]`} disabled={!canForward} onClick={forward}>
           <ChevronRight size={17} />
         </IconButton>
       </div>
@@ -71,7 +54,11 @@ function SearchField() {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Escape") setSearch("");
+          if (e.key === "Escape" && search) setSearch("");
+          else if (e.key === "Escape" || e.key === "Enter" || e.key === "ArrowDown") {
+            e.preventDefault();
+            focusPrimary();
+          }
         }}
         placeholder="Search"
         aria-label="Search"
@@ -82,34 +69,48 @@ function SearchField() {
   );
 }
 
-function ViewSwitch({ view }: { view: View }) {
-  const navigate = useApp((s) => s.navigate);
-  const replace = useApp((s) => s.replace);
+type Tabs = { value: string; options: { value: string; label: string }[]; select: (value: string) => void };
 
+/** The tabs the top bar shows for a view: Applications / All Resources, or a resource's tabs. */
+function tabsOf(view: View): Tabs | null {
+  const { navigate, replace } = useApp.getState();
   if (view.name === "applications" || view.name === "resources") {
-    return (
-      <Segmented
-        value={view.name}
-        options={[
-          { value: "applications", label: "Applications" },
-          { value: "resources", label: "All Resources" },
-        ]}
-        onChange={(value) =>
-          navigate(value === "applications" ? { name: "applications" } : { name: "resources", resource: null })
-        }
-      />
-    );
+    return {
+      value: view.name,
+      options: [
+        { value: "applications", label: "Applications" },
+        { value: "resources", label: "All Resources" },
+      ],
+      select: (value) =>
+        navigate(value === "applications" ? { name: "applications" } : { name: "resources", resource: null }),
+    };
   }
   if (view.name === "resource") {
-    const tabs: { value: ResourceTab; label: string }[] = [
+    const options: { value: ResourceTab; label: string }[] = [
       { value: "overview", label: "Overview" },
       ...(LOG_KINDS.has(view.resource.kind) ? [{ value: "logs" as const, label: "Logs" }] : []),
       { value: "events", label: "Events" },
       { value: "yaml", label: "YAML" },
     ];
-    return <Segmented value={view.tab} options={tabs} onChange={(tab) => replace({ ...view, tab })} />;
+    return { value: view.tab, options, select: (tab) => replace({ ...view, tab: tab as ResourceTab }) };
   }
   return null;
+}
+
+/** Ctrl+Tab and Ctrl+Shift+Tab: the next or previous tab of the current view, wrapping around. */
+export function stepTab(delta: 1 | -1) {
+  const { history, index } = useApp.getState();
+  const view = history[index];
+  const tabs = view && tabsOf(view);
+  if (!tabs) return;
+  const at = tabs.options.findIndex((o) => o.value === tabs.value);
+  const next = tabs.options[(at + delta + tabs.options.length) % tabs.options.length];
+  if (next) tabs.select(next.value);
+}
+
+function ViewSwitch({ view }: { view: View }) {
+  const tabs = tabsOf(view);
+  return tabs && <Segmented value={tabs.value} options={tabs.options} onChange={tabs.select} />;
 }
 
 function Segmented<T extends string>({
@@ -144,11 +145,13 @@ function Segmented<T extends string>({
 
 function IconButton({
   label,
+  shortcut,
   disabled,
   onClick,
   children,
 }: {
   label: string;
+  shortcut: string;
   disabled?: boolean;
   onClick: () => void;
   children: ReactNode;
@@ -157,7 +160,7 @@ function IconButton({
     <button
       type="button"
       aria-label={label}
-      title={label}
+      title={`${label} (${shortcut})`}
       disabled={disabled}
       onClick={onClick}
       className="rounded-md p-1 text-muted enabled:hover:bg-hover enabled:hover:text-text disabled:opacity-35"

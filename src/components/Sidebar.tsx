@@ -2,6 +2,7 @@ import {
   ChartNoAxesColumn,
   ChevronsUpDown,
   Folder,
+  Keyboard,
   Layers,
   LayoutGrid,
   Monitor,
@@ -13,6 +14,7 @@ import { type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode
 
 import { LABEL_COLORS } from "../lib/clusterLabels";
 import { cx } from "../lib/cx";
+import { MOD } from "../lib/keys";
 import { NAMESPACE } from "../lib/kinds";
 import { popupMenu } from "../lib/menu";
 import type { ThemePref } from "../lib/theme";
@@ -166,15 +168,26 @@ export function Sidebar({ contexts, onReload }: Props) {
 
       <footer className="flex items-center justify-between border-t border-line px-3 py-2">
         <ThemeSwitch />
-        <button
-          type="button"
-          onClick={onReload}
-          className="rounded-md p-1.5 text-muted hover:bg-selected hover:text-text"
-          title="Reload kubeconfig"
-          aria-label="Reload kubeconfig"
-        >
-          <RotateCw size={14} />
-        </button>
+        <div className="flex">
+          <button
+            type="button"
+            onClick={() => useApp.getState().setOverlay("shortcuts")}
+            className="rounded-md p-1.5 text-muted hover:bg-selected hover:text-text"
+            title={`Keyboard shortcuts (?) · Command palette (${MOD}K)`}
+            aria-label="Keyboard shortcuts"
+          >
+            <Keyboard size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={onReload}
+            className="rounded-md p-1.5 text-muted hover:bg-selected hover:text-text"
+            title="Reload kubeconfig"
+            aria-label="Reload kubeconfig"
+          >
+            <RotateCw size={14} />
+          </button>
+        </div>
       </footer>
     </aside>
   );

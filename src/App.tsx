@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { ClusterLabelDialog } from "./components/ClusterLabelDialog";
+import { CommandPalette } from "./components/CommandPalette";
 import { ConfirmDelete } from "./components/ConfirmDelete";
 import { Dock } from "./components/Dock";
 import { Notices } from "./components/Notices";
+import { Shortcuts } from "./components/Shortcuts";
+import { ShortcutsDialog } from "./components/ShortcutsDialog";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { listContexts, reloadKubeconfig } from "./lib/ipc";
@@ -78,6 +81,9 @@ export default function App() {
       </main>
       <ConfirmDelete />
       <ClusterLabelDialog />
+      <CommandPalette contexts={contexts?.contexts ?? []} onReload={reload} />
+      <ShortcutsDialog />
+      <Shortcuts />
       <Notices />
     </div>
   );

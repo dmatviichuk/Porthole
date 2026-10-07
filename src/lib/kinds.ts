@@ -173,7 +173,8 @@ const SHORT_NAMES: Record<string, string> = {
   customresourcedefinitions: "crd crds",
 };
 
-const searchText = (t: ResourceInfo) =>
+/** What a type is found by: kind, plural, kubectl short name and API group. */
+export const searchText = (t: ResourceInfo) =>
   [t.kind, pluralTitle(t.kind), t.plural, t.group, SHORT_NAMES[t.plural] ?? ""].join(" ").toLowerCase();
 
 /**

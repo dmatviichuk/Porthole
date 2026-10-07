@@ -9,7 +9,6 @@ import { type AppRow, buildApplications } from "../lib/apps";
 import { Age } from "../lib/columns";
 import { matches } from "../lib/format";
 import { CRONJOB, DAEMONSET, DEPLOYMENT, JOB, POD, STATEFULSET } from "../lib/kinds";
-import { popupMenu } from "../lib/menu";
 import { podKey, usePodUsage } from "../lib/metricsStore";
 import { percent } from "../lib/utilization";
 import { useResources } from "../lib/watchStore";
@@ -142,7 +141,9 @@ export function ApplicationsView() {
           getRowId={(a) => a.key}
           initialSort={{ id: "name", desc: false }}
           onOpen={(a) => openResource(a.resource, a.row)}
-          onMenu={(a) => void popupMenu(resourceMenu(context, a.resource, a.row))}
+          menu={(a) => resourceMenu(context, a.resource, a.row)}
+          primary
+          search={search}
           empty={
             loading
               ? "Loading applications…"

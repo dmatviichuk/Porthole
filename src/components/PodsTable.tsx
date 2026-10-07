@@ -182,7 +182,7 @@ export function PodsTable({ context, id, title, pods, showNamespace = false, emp
           fit
           initialSort={{ id: "name", desc: false }}
           onOpen={(p) => openResource(POD, p)}
-          onMenu={(p) => void popupMenu(resourceMenu(context, POD, p))}
+          menu={(p) => resourceMenu(context, POD, p)}
           empty={empty}
         />
       </div>
@@ -190,13 +190,17 @@ export function PodsTable({ context, id, title, pods, showNamespace = false, emp
   );
 }
 
-/** The "…" button at the end of a row; it opens the same menu as a right click. */
+/**
+ * The "…" button at the end of a row; it opens the same menu as a right click. Out of the tab
+ * order: from the keyboard, M on the row opens that menu.
+ */
 export function RowMenuButton({ onOpen }: { onOpen: (anchor: HTMLElement) => void }) {
   return (
     <button
       type="button"
+      tabIndex={-1}
       aria-label="Actions"
-      title="Actions"
+      title="Actions (M)"
       onClick={(e) => {
         e.stopPropagation();
         onOpen(e.currentTarget);

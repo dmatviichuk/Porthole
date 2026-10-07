@@ -29,6 +29,9 @@ export type DeleteRequest = {
 
 export type Notice = { id: number; tone: "ok" | "error"; text: string };
 
+/** The keyboard dialogs: the command palette and the shortcut list. */
+export type Overlay = "palette" | "shortcuts" | null;
+
 type AppState = {
   context: string | null;
   /** null means all namespaces. */
@@ -46,6 +49,7 @@ type AppState = {
   /** The context whose label dialog is open. */
   labelling: string | null;
   notices: Notice[];
+  overlay: Overlay;
 
   setContext: (context: string) => void;
   setNamespace: (namespace: string | null) => void;
@@ -72,6 +76,7 @@ type AppState = {
   editLabel: (context: string | null) => void;
   notify: (tone: Notice["tone"], text: string) => void;
   dismiss: (id: number) => void;
+  setOverlay: (overlay: Overlay) => void;
 };
 
 // Per-viewer conveniences only; the app works the same when storage is unavailable.
@@ -112,6 +117,7 @@ export const useApp = create<AppState>((set, get) => ({
   labels: loadLabels(),
   labelling: null,
   notices: [],
+  overlay: null,
 
   setContext: (context) => {
     saved.set("context", context);
@@ -183,6 +189,7 @@ export const useApp = create<AppState>((set, get) => ({
     window.setTimeout(() => get().dismiss(id), tone === "error" ? 8000 : 4000);
   },
   dismiss: (id) => set((state) => ({ notices: state.notices.filter((n) => n.id !== id) })),
+  setOverlay: (overlay) => set({ overlay }),
 }));
 
 export const useView = () => useApp((s) => s.history[s.index] ?? HOME);

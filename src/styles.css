@@ -142,6 +142,13 @@ body {
   }
 }
 
+/* The row cursor of a focused table. Shown once a key is pressed (the shortcuts set data-input),
+   so the tables look as before while you use the mouse. */
+:root[data-input="keyboard"] [role="grid"]:focus [role="row"][aria-selected="true"] {
+  background: var(--selected);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
 input::placeholder {
   color: var(--faint);
 }
