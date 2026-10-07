@@ -1,6 +1,6 @@
 [package]
 name = "porthole"
-version = "1.0.1"
+version = "1.0.2"
 description = "Desktop client for Kubernetes"
 authors = ["Dmytro Matviichuk"]
 license = "Apache-2.0"
