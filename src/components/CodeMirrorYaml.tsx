@@ -8,7 +8,7 @@ import {
   indentOnInput,
   syntaxHighlighting,
 } from "@codemirror/language";
-import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
+import { highlightSelectionMatches, openSearchPanel, searchKeymap } from "@codemirror/search";
 import { EditorState } from "@codemirror/state";
 import {
   crosshairCursor,
@@ -24,6 +24,8 @@ import {
 } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { useEffect, useRef } from "react";
+
+import { useFind } from "../lib/find";
 
 // Colours come from CSS variables, so the editor follows the theme without being rebuilt.
 const theme = EditorView.theme({
@@ -83,6 +85,10 @@ export default function CodeMirrorYaml({ value, onChange, onSave }: YamlEditorPr
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const handlers = useRef({ onChange, onSave });
+  // Cmd/Ctrl+F from outside the editor; inside it, the search keymap opens the panel itself.
+  useFind(() => {
+    if (view.current) openSearchPanel(view.current);
+  });
 
   useEffect(() => {
     handlers.current = { onChange, onSave };

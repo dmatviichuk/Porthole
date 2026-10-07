@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { type ReactNode, useEffect, useRef } from "react";
 
 import { cx } from "../lib/cx";
+import { openFind, useFind } from "../lib/find";
 import { type ResourceTab, useApp, useView, type View } from "../store";
 
 const LOG_KINDS = new Set(["Pod", "Deployment", "StatefulSet", "DaemonSet", "Job", "CronJob", "ReplicaSet"]);
@@ -12,17 +13,13 @@ export function TopBar() {
   const canForward = useApp((s) => s.index < s.history.length - 1);
   const back = useApp((s) => s.back);
   const forward = useApp((s) => s.forward);
-  const search = useApp((s) => s.search);
-  const setSearch = useApp((s) => s.setSearch);
-  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.metaKey && !e.ctrlKey) return;
       if (e.key === "f") {
-        e.preventDefault();
-        searchRef.current?.focus();
-        searchRef.current?.select();
+        // The YAML editor opens its own search panel when it has focus.
+        if (!e.defaultPrevented && openFind()) e.preventDefault();
       } else if (e.key === "[") {
         e.preventDefault();
         useApp.getState().back();
@@ -52,26 +49,36 @@ export function TopBar() {
 
       <ViewSwitch view={view} />
 
-      <div className="flex justify-end">
-        {searchable && (
-          <label className="flex h-7 w-[220px] items-center gap-1.5 rounded-md border border-line-strong bg-bg px-2 focus-within:border-accent">
-            <Search size={13} className="shrink-0 text-muted" aria-hidden />
-            <input
-              ref={searchRef}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") setSearch("");
-              }}
-              placeholder="Search"
-              aria-label="Search"
-              spellCheck={false}
-              className="min-w-0 flex-1 bg-transparent outline-none"
-            />
-          </label>
-        )}
-      </div>
+      <div className="flex justify-end">{searchable && <SearchField />}</div>
     </header>
+  );
+}
+
+function SearchField() {
+  const search = useApp((s) => s.search);
+  const setSearch = useApp((s) => s.setSearch);
+  const ref = useRef<HTMLInputElement>(null);
+  useFind(() => {
+    ref.current?.focus();
+    ref.current?.select();
+  });
+
+  return (
+    <label className="flex h-7 w-[220px] items-center gap-1.5 rounded-md border border-line-strong bg-bg px-2 focus-within:border-accent">
+      <Search size={13} className="shrink-0 text-muted" aria-hidden />
+      <input
+        ref={ref}
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setSearch("");
+        }}
+        placeholder="Search"
+        aria-label="Search"
+        spellCheck={false}
+        className="min-w-0 flex-1 bg-transparent outline-none"
+      />
+    </label>
   );
 }
 

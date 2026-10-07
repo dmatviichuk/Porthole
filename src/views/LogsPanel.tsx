@@ -1,11 +1,12 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDownToLine, Search } from "lucide-react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { cx } from "../lib/cx";
+import { useFind } from "../lib/find";
 import { logTime, sourceLabels } from "../lib/format";
 import { type Stop, streamLogs } from "../lib/ipc";
-import { displayLength, type Level, parseLog, stringify } from "../lib/logFormat";
+import { displayLength, type Level, matchRanges, parseLog, type Span, stringify } from "../lib/logFormat";
 import { useBooleanPref } from "../lib/prefs";
 import type { LogTarget } from "../lib/types";
 
@@ -45,6 +46,11 @@ export function LogsPanel({ context, targets }: { context: string; targets: LogT
   const [revealed, setRevealed] = useState(false);
   const [box, setBox] = useState({ width: 0, charWidth: 7.2 });
   const scrollRef = useRef<HTMLDivElement>(null);
+  const filterRef = useRef<HTMLInputElement>(null);
+  useFind(() => {
+    filterRef.current?.focus();
+    filterRef.current?.select();
+  });
 
   const keys = targets.map(targetKey).toSorted().join("\n");
   const multiple = targets.length > 1;
@@ -166,6 +172,7 @@ export function LogsPanel({ context, targets }: { context: string; targets: LogT
         <label className="flex h-7 w-[260px] items-center gap-1.5 rounded-md border border-line-strong px-2 focus-within:border-accent">
           <Search size={13} className="text-muted" aria-hidden />
           <input
+            ref={filterRef}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             placeholder="Filter lines"
@@ -234,7 +241,11 @@ export function LogsPanel({ context, targets }: { context: string; targets: LogT
                   </span>
                 )}
                 <span className={cx(wrap && "min-w-0 break-all whitespace-pre-wrap")}>
-                  {formatted && !line.system ? <LogText text={line.text} /> : line.text}
+                  {formatted && !line.system ? (
+                    <LogText text={line.text} filter={filter} />
+                  ) : (
+                    <Marked text={line.text} ranges={matchRanges(line.text, filter)} />
+                  )}
                 </span>
               </div>
             );
@@ -264,47 +275,73 @@ const LEVEL_CLASS: Record<Level, string> = {
 
 /**
  * JSON lines as level, message and `key=value` fields; plain lines with their level word
- * coloured. The filter still matches the raw text.
+ * coloured. The filter still matches the raw text; what it matched is marked where shown.
  */
-function LogText({ text }: { text: string }) {
+function LogText({ text, filter }: { text: string; filter: string }) {
   const parsed = parseLog(text);
   if (parsed.kind === "text") {
-    if (!parsed.level || !parsed.levelAt) return text;
+    const ranges = matchRanges(text, filter);
+    if (!parsed.level || !parsed.levelAt) return <Marked text={text} ranges={ranges} />;
     const [start, end] = parsed.levelAt;
     return (
       <>
-        {text.slice(0, start)}
-        <span className={cx("font-semibold", LEVEL_CLASS[parsed.level])}>{text.slice(start, end)}</span>
-        {text.slice(end)}
+        <Marked text={text.slice(0, start)} ranges={ranges} />
+        <span className={cx("font-semibold", LEVEL_CLASS[parsed.level])}>
+          <Marked text={text.slice(start, end)} ranges={ranges} offset={start} />
+        </span>
+        <Marked text={text.slice(end)} ranges={ranges} offset={end} />
       </>
     );
   }
+  // Each part is shown differently from how it reads in the raw line, so each is matched on its own.
+  const mark = (part: string) => <Marked text={part} ranges={matchRanges(part, filter)} />;
   return (
     <>
       {parsed.levelText !== null && (
         <span className={cx("mr-2 font-semibold", parsed.level ? LEVEL_CLASS[parsed.level] : "text-muted")}>
-          {parsed.levelText.toUpperCase()}
+          {mark(parsed.levelText.toUpperCase())}
         </span>
       )}
-      {parsed.message !== null && <span className="mr-3">{parsed.message}</span>}
+      {parsed.message !== null && <span className="mr-3">{mark(parsed.message)}</span>}
       {parsed.fields.map(([key, value]) => (
         <span key={key} className="mr-3">
-          <span className="text-[var(--syn-key)]">{key}</span>
+          <span className="text-[var(--syn-key)]">{mark(key)}</span>
           <span className="text-faint">=</span>
-          <FieldValue value={value} />
+          <FieldValue value={value} mark={mark} />
         </span>
       ))}
     </>
   );
 }
 
-function FieldValue({ value }: { value: unknown }) {
-  if (value === null) return <span className="text-faint">null</span>;
-  if (typeof value === "string") return <span className="text-[var(--syn-string)]">{value}</span>;
+function FieldValue({ value, mark }: { value: unknown; mark: (part: string) => ReactNode }) {
+  if (value === null) return <span className="text-faint">{mark("null")}</span>;
+  if (typeof value === "string") return <span className="text-[var(--syn-string)]">{mark(value)}</span>;
   if (typeof value === "number" || typeof value === "boolean") {
-    return <span className="text-[var(--syn-number)]">{String(value)}</span>;
+    return <span className="text-[var(--syn-number)]">{mark(String(value))}</span>;
   }
-  return <span className="text-muted">{stringify(value)}</span>;
+  return <span className="text-muted">{mark(stringify(value))}</span>;
+}
+
+/** `text` with the filter matches marked; `ranges` count from the line start, `text` starts at `offset`. */
+function Marked({ text, ranges, offset = 0 }: { text: string; ranges: Span[]; offset?: number }) {
+  const parts: ReactNode[] = [];
+  let at = 0;
+  for (const [start, end] of ranges) {
+    const from = Math.max(start - offset, at);
+    const to = Math.min(end - offset, text.length);
+    if (to <= from) continue;
+    parts.push(
+      text.slice(at, from),
+      <mark key={from} className="rounded-[2px] bg-progress/30 text-inherit">
+        {text.slice(from, to)}
+      </mark>,
+    );
+    at = to;
+  }
+  if (parts.length === 0) return text;
+  parts.push(text.slice(at));
+  return <>{parts}</>;
 }
 
 function Toggle({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: string }) {

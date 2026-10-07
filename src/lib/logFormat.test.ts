@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { displayLength, parseLog } from "./logFormat";
+import { displayLength, matchRanges, parseLog } from "./logFormat";
 
 describe("parseLog", () => {
   it("splits structured JSON into level, message and the remaining fields", () => {
@@ -52,3 +52,23 @@ describe("displayLength", () => {
   });
 });
 
+describe("matchRanges", () => {
+  it("finds every occurrence, ignoring case", () => {
+    expect(matchRanges("Logger: logger.info from LOGGER", "logger")).toEqual([
+      [0, 6],
+      [8, 14],
+      [25, 31],
+    ]);
+  });
+
+  it("takes the query literally", () => {
+    expect(matchRanges("a.b axb (x) [y]", "a.b")).toEqual([[0, 3]]);
+    expect(matchRanges("a.b axb (x) [y]", "(x)")).toEqual([[8, 11]]);
+    expect(matchRanges("a.b axb (x) [y]", "[y]")).toEqual([[12, 15]]);
+  });
+
+  it("finds nothing for an empty query or no match", () => {
+    expect(matchRanges("anything", "")).toEqual([]);
+    expect(matchRanges("anything", "logger")).toEqual([]);
+  });
+});

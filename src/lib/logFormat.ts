@@ -110,6 +110,18 @@ function parseText(text: string): ParsedLog {
 
 export const stringify = (value: unknown) => (typeof value === "string" ? value : JSON.stringify(value));
 
+/** Start (inclusive) and end (exclusive) offsets in a string. */
+export type Span = [number, number];
+
+const SPECIAL = /[.*+?^${}()|[\]\\]/g;
+
+/** Every place `query` occurs in `text`, ignoring case, as the line filter matches. */
+export function matchRanges(text: string, query: string): Span[] {
+  if (!query) return [];
+  const pattern = new RegExp(query.replace(SPECIAL, "\\$&"), "gi");
+  return Array.from(text.matchAll(pattern), (m) => [m.index, m.index + m[0].length]);
+}
+
 /**
  * About how many characters a line takes on screen, for estimating wrapped heights before
  * they are measured: formatted JSON drops quotes, braces and the time field.
