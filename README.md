@@ -7,6 +7,8 @@ creates resources.
 Built with [Tauri 2](https://tauri.app) (Rust, the system web view) and React. It does not bundle
 a browser engine: the macOS app is about 10 MB, a 5 MB download.
 
+![Applications: every workload in the cluster with its pods, CPU and memory usage and status](docs/screenshots/applications.png)
+
 ## Features
 
 - **Applications.** Deployments, StatefulSets, DaemonSets, CronJobs, Jobs and standalone pods in
@@ -40,6 +42,26 @@ a browser engine: the macOS app is about 10 MB, a 5 MB download.
 - **Comfort.** Light, dark and auto themes; drag column headers to reorder them (remembered per
   table); resizable sidebar; back and forward navigation; namespace filter; search for resource
   types by kind, short name or API group.
+
+## Screenshots
+
+A Deployment's page: overview, utilization against requests and limits, and its pods with live
+usage.
+
+![Resource page of a Deployment with its overview, utilization and pods](docs/screenshots/resource.png)
+
+The same Deployment's logs, followed across all of its pods, with JSON lines shown as level,
+message and fields.
+
+![Logs of every pod of a Deployment, interleaved and formatted](docs/screenshots/logs.png)
+
+The cluster overview: capacity, requests, limits and usage, per cluster and per node.
+
+![Cluster overview with utilization and the list of nodes](docs/screenshots/overview.png)
+
+A shell into a container, docked under the current view.
+
+![A shell into a container, docked under the resource page](docs/screenshots/shell.png)
 
 ## Install
 
