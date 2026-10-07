@@ -1,0 +1,96 @@
+name: Bug report
+description: Something in Porthole doesn't work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. A security problem goes to
+        [Report a vulnerability](https://github.com/dmatviichuk/Porthole/security/advisories/new)
+        instead, never into a public issue.
+
+        Remove cluster names, hostnames, tokens and anything else private from what you paste.
+  - type: input
+    id: version
+    attributes:
+      label: Porthole version
+      description: On macOS, Porthole › About Porthole. Elsewhere, the version in the file you installed.
+      placeholder: 1.0.2
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS, Apple silicon
+        - macOS, Intel
+        - Windows
+        - Linux
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: Operating system version
+      placeholder: macOS 27.0, Windows 11 24H2, Ubuntu 26.04
+  - type: input
+    id: cluster
+    attributes:
+      label: Cluster
+      description: Kubernetes version and where it runs, if the bug involves a cluster.
+      placeholder: 1.35 on EKS
+  - type: dropdown
+    id: auth
+    attributes:
+      label: How your kubeconfig signs in
+      options:
+        - Exec plugin (aws eks get-token, kubelogin, gke-gcloud-auth-plugin...)
+        - Token
+        - Client certificate
+        - Other or not sure
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Pick the context
+        2. Open Applications
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: |
+        On macOS and Linux, start Porthole from a terminal and copy what it prints, for example
+        `RUST_LOG=porthole_lib=debug,kube=info /Applications/Porthole.app/Contents/MacOS/porthole`.
+      render: text
+  - type: textarea
+    id: more
+    attributes:
+      label: Screenshots and anything else
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: It still happens on the [latest release](https://github.com/dmatviichuk/Porthole/releases/latest).
+          required: true
+        - label: I searched the [existing issues](https://github.com/dmatviichuk/Porthole/issues?q=is%3Aissue) for this bug.
+          required: true
+        - label: I removed private details from what I pasted.
+          required: true

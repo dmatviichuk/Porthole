@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest something new or a better way to do something.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Porthole never creates resources, and switching views never waits on the cluster. Requests
+        that change either are declined; [Contributing](https://github.com/dmatviichuk/Porthole/blob/main/.github/CONTRIBUTING.md#suggesting-a-feature)
+        explains why.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What Porthole could do
+      description: How you picture it working. Mockups and screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: What you do instead today
+      description: A kubectl command, another tool, a workaround.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the [existing issues](https://github.com/dmatviichuk/Porthole/issues?q=is%3Aissue) for this idea.
+          required: true
+        - label: I'd like to open a pull request for it.
