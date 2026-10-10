@@ -1,18 +1,10 @@
 # Releasing
 
-1. Bump `version` in `package.json` (the app version comes from it) and in `src-tauri/Cargo.toml`,
-   and push to `main`.
-2. In the Actions tab, run **Release** on `main`. It tags the commit `v<version>`.
+1. Update `workspace.package.version` in the root `Cargo.toml` and refresh `Cargo.lock` with `cargo check --workspace`.
+2. Run `cargo xtask check` and compare the application in both themes against the previous release.
+3. Build installers with `cargo xtask package --profile release`.
+4. After review, push the matching `v<version>` tag, or run the Release workflow on `main`.
 
-The [Release workflow](../.github/workflows/release.yml) builds macOS (Apple silicon and Intel),
-Windows and Linux in parallel into a draft release and publishes it once every build succeeds.
-Pushing a tag (`git tag v1.1.0 && git push origin v1.1.0`) works too.
-
-## Caches
-
-Prefer running it on `main`: GitHub only shares caches saved by branch runs, so those
-runs leave the compiled dependencies and packaging tools for the next release,
-while a tag run can restore them but not save. Running it with **publish** off builds every
-platform without releasing (the bundles are kept as workflow artifacts), which is also a way to
-warm the caches after a dependency update. CI on `main` keeps its own cache the same way;
-pull requests reuse it without saving copies.
+The workflow builds macOS Apple silicon and Intel, Windows and Linux installers.
+One draft release collects all platforms and is published only after every build succeeds.
+Turn off `publish` to build workflow artifacts without publishing a release.

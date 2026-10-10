@@ -8,7 +8,7 @@
   "labels": ["dependencies"],
   "packageRules": [
     {
-      "description": "Every version update in one PR, majors included: npm packages, crates, GitHub Actions and pnpm itself",
+      "description": "Every version update in one PR, majors included: crates and GitHub Actions",
       "matchPackageNames": ["*"],
       "groupName": "dependencies",
       "groupSlug": "all"

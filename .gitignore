@@ -1,6 +1,6 @@
-node_modules
-dist
+target/
+dist/
 *.log
 .DS_Store
-.idea
-.vscode
+.idea/
+.vscode/

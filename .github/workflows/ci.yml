@@ -1,64 +1,35 @@
 name: CI
-
 on:
   push:
     branches: [main]
   pull_request:
-
 permissions:
   contents: read
-
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
-  frontend:
-    runs-on: ubuntu-24.04
+  rust:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 26
-          cache: pnpm # the pnpm store, keyed by pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm lint
-      - run: pnpm test
-      - run: pnpm build:ui
-
-  backend:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      # Plain apt, as in the release workflow: a package-cache action saved an empty cache here
-      # and then skipped the install on every run.
-      - name: Install WebKitGTK and friends
+      - name: Install Linux native dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libayatana-appindicator3-dev librsvg2-dev
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 26
-          cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
+          sudo apt-get install -y pkg-config libfontconfig1-dev libxkbcommon-dev libx11-dev libxcb1-dev libgl1-mesa-dev
+      - uses: dtolnay/rust-toolchain@1.99.0
         with:
           components: clippy, rustfmt
-      # Compiled dependencies, keyed by Cargo.lock. Only `main` saves, so every pull
-      # request starts from its cache without spending the repository's 10 GB on copies.
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
-      - run: pnpm install --frozen-lockfile
-      # The Rust build embeds the window icon, so the generated icons must exist first.
-      - run: pnpm icons
-      - run: cargo fmt --check
-        working-directory: src-tauri
-      - run: cargo clippy --all-targets -- -D warnings
-        working-directory: src-tauri
-      - run: cargo test
-        working-directory: src-tauri
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
+      - run: cargo build --locked -p porthole

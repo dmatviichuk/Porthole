@@ -1,7 +1,7 @@
 name: Renovate
 
 # Weekly dependency updates, at most two PRs per run (see .github/renovate.json): one with every
-# version update, and one refreshing the indirect dependencies in Cargo.lock and pnpm-lock.yaml.
+# version update, and one refreshing the indirect dependencies in Cargo.lock.
 #
 # RENOVATE_TOKEN is a fine-grained token for this repository with read and write access to
 # Contents, Pull requests and Workflows. The built-in GITHUB_TOKEN would not do: its PRs do not

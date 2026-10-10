@@ -4,8 +4,8 @@ A fast desktop client for Kubernetes. Browse every cluster in your kubeconfig, f
 open shells, see what each node and workload is using, and edit or delete resources. It never
 creates resources.
 
-Built with [Tauri 2](https://tauri.app) (Rust, the system web view) and React. It does not bundle
-a browser engine: the macOS app is about 10 MB, a 5 MB download.
+Implemented entirely in Rust with [egui](https://github.com/emilk/egui). Kubernetes watches,
+logs and container terminals run in the same native process.
 
 ![Applications: every workload in the cluster with its pods, CPU and memory usage and status](docs/screenshots/applications.png)
 
@@ -15,7 +15,8 @@ a browser engine: the macOS app is about 10 MB, a 5 MB download.
   one live table, with pod counts, CPU and memory usage, and the status that matters (a crash-looping
   pod surfaces on its Deployment).
 - **All resources.** Every type the cluster serves, custom resources included, grouped the way
-  you think about them, with kind-specific columns.
+  you think about them, with kind-specific columns. Choose **All types** for one combined table
+  of every type in the selected namespace.
 - **Resource pages.** Overview, utilization against requests and limits, pods or containers with
   live usage, labels and annotations, and the Services, Ingresses, Config Maps and claims that
   belong to the workload. Tabs for logs, events and YAML.

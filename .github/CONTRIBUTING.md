@@ -41,14 +41,12 @@ Two decisions are part of what Porthole is, and changes against them will be dec
 
 1. Fork the repository and branch from `main`.
 2. Set up the prerequisites from [Building from source](../docs/building.md), then run the app with
-   hot reload as described in [Development](../docs/development.md).
-3. Keep each pull request to one change, and add or update tests with it: UI tests are vitest files
-   next to the code (`src/lib/apps.test.ts`), backend tests live in `src-tauri/src`.
+   the native application as described in [Development](../docs/development.md).
+3. Keep each pull request to one change, and add or update tests with it: Rust unit tests live beside the UI and backend code in `apps/porthole/src` and `crates/kubernetes/src`.
 4. If you touched watches, logs, shells, YAML save or delete, also run the end-to-end test from
    [Development](../docs/development.md) against a disposable cluster (k3s or kind in Docker), never
    one you care about.
-5. Run `pnpm check`. It runs the checks CI runs: typecheck, oxlint, vitest, `cargo fmt --check`, clippy
-   with warnings denied and `cargo test`.
+5. Run `cargo xtask check`. It runs formatting, clippy with warnings denied and every workspace test.
 6. Open the pull request against `main`. Say what changed and how you checked it; for UI changes,
    add screenshots in both the light and the dark theme.
 
@@ -57,8 +55,7 @@ Leave the version alone; releases are cut separately (see [Releasing](../docs/re
 ## Code
 
 - Match the code around you. Rust is formatted with `cargo fmt`; comments explain why, not what.
-- The UI talks to the backend only through Tauri commands and channels. Nothing listens on a local
-  port.
+- The egui UI receives typed messages directly from the Rust backend. Nothing listens on a local port.
 - Every dependency stays on its latest release, and [Renovate](../docs/development.md#dependency-updates)
   keeps it there, so don't bump versions in a feature pull request. Prefer a few lines of our own
   over a new package; if you do add one, say why in the pull request.

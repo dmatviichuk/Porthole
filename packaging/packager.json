@@ -1,0 +1,17 @@
+{
+  "productName": "Porthole",
+  "identifier": "dev.dmatviichuk.porthole",
+  "binaries": [{"path": "porthole", "main": true}],
+  "category": "DeveloperTool",
+  "publisher": "Dmytro Matviichuk",
+  "authors": ["Dmytro Matviichuk"],
+  "copyright": "Copyright © 2026 Dmytro Matviichuk",
+  "description": "Desktop client for Kubernetes",
+  "licenseFile": "LICENSE",
+  "homepage": "https://github.com/dmatviichuk/Porthole",
+  "icons": ["assets/porthole.icns", "assets/porthole.ico", "assets/porthole.png"],
+  "macos": {"minimumSystemVersion": "13.0", "signingIdentity": "-"},
+  "deb": {
+    "depends": ["libc6 (>= 2.35)", "libgcc-s1", "libfontconfig1", "libfreetype6", "libx11-6", "libxcb1", "libxkbcommon0", "libgl1", "libwayland-client0", "libwayland-cursor0", "libwayland-egl1"]
+  }
+}

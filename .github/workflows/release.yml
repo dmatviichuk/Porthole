@@ -1,7 +1,7 @@
 name: Release
 
-# Release the version in package.json: from the Actions tab ("Run workflow" on `main`),
-# or by pushing a matching tag (e.g. v1.1.0). One draft release is created up front, every
+# Release the version in Cargo.toml: from the Actions tab ("Run workflow" on `main`),
+# or by pushing a matching tag (e.g. v2.0.0). One draft release is created up front, every
 # platform uploads into it, and it is published only when all builds succeeded.
 #
 # Caches: GitHub shares caches from the default branch with every later run, but never shares
@@ -35,9 +35,9 @@ jobs:
       - uses: actions/checkout@v7
       - id: version
         run: |
-          version=$(node -p "require('./package.json').version")
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')
           if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            echo "::error::Tag $GITHUB_REF_NAME does not match Cargo.toml version $version"
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -90,47 +90,40 @@ jobs:
       - uses: actions/checkout@v7
       # Plain apt here, not a cache action: this job holds a token that can publish releases,
       # so it runs no third-party code beyond the build itself. CI caches these packages.
-      - name: Install WebKitGTK and friends
+      - name: Install Linux native and packaging dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libayatana-appindicator3-dev librsvg2-dev patchelf
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 26
-          cache: pnpm # the pnpm store, keyed by pnpm-lock.yaml
-      - uses: dtolnay/rust-toolchain@stable
+          sudo apt-get install -y pkg-config libfontconfig1-dev libxkbcommon-dev libx11-dev libxcb1-dev libgl1-mesa-dev patchelf rpm
+      - uses: dtolnay/rust-toolchain@1.99.0
         with:
           targets: ${{ matrix.target }}
-      # Compiled release dependencies per target, keyed by Cargo.lock (see the note at the top).
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
           key: ${{ matrix.target }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
-      # Packaging tools Tauri downloads on first use: linuxdeploy and the AppImage plugins on
-      # Linux, WiX and NSIS on Windows.
-      - uses: actions/cache@v6
+      - run: cargo install cargo-packager --version 0.11.8 --locked
+      - run: cargo xtask package --profile release --target ${{ matrix.target }}
+      - uses: actions/upload-artifact@v6
         with:
+          name: porthole-${{ matrix.target }}
           path: |
-            ~/.cache/tauri
-            ~/AppData/Local/tauri
-          key: tauri-bundler-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: tauri-bundler-${{ runner.os }}-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm icons
-      - uses: tauri-apps/tauri-action@v1
+            target/${{ matrix.target }}/release/bundle/**/*.dmg
+            target/${{ matrix.target }}/release/bundle/**/*.msi
+            target/${{ matrix.target }}/release/bundle/**/*-setup.exe
+            target/${{ matrix.target }}/release/bundle/**/*.AppImage
+            target/${{ matrix.target }}/release/bundle/**/*.deb
+            target/${{ matrix.target }}/release/bundle/**/*.rpm
+          if-no-files-found: error
+      - name: Upload release installers
+        if: needs.draft.outputs.release-id != ''
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tauriScript: pnpm tauri
-          args: --target ${{ matrix.target }}
-          # Empty when not publishing: tauri-action then only builds, and the bundles are kept
-          # as workflow artifacts instead.
-          releaseId: ${{ needs.draft.outputs.release-id }}
-          uploadWorkflowArtifacts: ${{ needs.draft.outputs.release-id == '' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.draft.outputs.version }}
+        run: |
+          find "target/${{ matrix.target }}/release/bundle" -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*-setup.exe' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \) -print0 | xargs -0 gh release upload "v$VERSION" --clobber
 
   publish:
     needs: [draft, build]
