@@ -47,7 +47,8 @@ logs and container terminals run in the same native process.
   (Ctrl in place of ⌘ on Windows and Linux).
 - **Comfort.** Light, dark and auto themes; drag column headers to reorder them (remembered per
   table); resizable sidebar; back and forward navigation; namespace filter; search for resource
-  types by kind, short name or API group.
+  types by kind, short name or API group. The sidebar gear opens settings, including an opt-in
+  option to sync your machine's active kubeconfig context when switching profiles in Porthole.
 
 ## Screenshots
 

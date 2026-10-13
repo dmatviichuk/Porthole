@@ -30,6 +30,8 @@ enum Action {
     Namespace(Option<String>),
     Browse,
     Context(String),
+    SyncMachineContext(bool),
+    Settings(Pos2),
     Theme(Theme),
     Basis(String, String),
     Reload,
@@ -186,15 +188,17 @@ impl App {
             .as_ref()
             .ok()
             .and_then(|c| {
-                [
-                    prefs.context.as_ref(),
-                    c.current.as_ref(),
-                    c.contexts.first().map(|c| &c.name),
-                ]
-                .into_iter()
-                .flatten()
-                .find(|name| c.contexts.iter().any(|c| &c.name == *name))
-                .cloned()
+                let preferred = if prefs.sync_machine_context {
+                    [c.current.as_ref(), prefs.context.as_ref()]
+                } else {
+                    [prefs.context.as_ref(), c.current.as_ref()]
+                };
+                preferred
+                    .into_iter()
+                    .chain([c.contexts.first().map(|c| &c.name)])
+                    .flatten()
+                    .find(|name| c.contexts.iter().any(|c| &c.name == *name))
+                    .cloned()
             })
             .unwrap_or_default();
         let namespace = prefs.namespaces.get(&context).cloned().flatten();
@@ -337,6 +341,9 @@ impl App {
                 }
             }
             Action::Context(c) => {
+                if self.prefs.sync_machine_context && !self.sync_machine_context(&c) {
+                    return;
+                }
                 self.context = c;
                 self.prefs.context = Some(self.context.clone());
                 self.namespace = self.prefs.namespaces.get(&self.context).cloned().flatten();
@@ -345,6 +352,40 @@ impl App {
                 self.search.clear();
                 self.shell_focus = false;
                 self.data.warm(&self.context);
+            }
+            Action::SyncMachineContext(enabled) => {
+                if enabled && !self.context.is_empty() && !self.sync_machine_context(&self.context.clone()) {
+                    return;
+                }
+                self.prefs.sync_machine_context = enabled;
+            }
+            Action::Settings(pos) => {
+                let mut sync = MenuItem::action(
+                    "Sync machine context when switching profiles",
+                    Action::SyncMachineContext(!self.prefs.sync_machine_context),
+                );
+                sync.checked = Some(self.prefs.sync_machine_context);
+                let themes = [(Theme::Light, "Light"), (Theme::Dark, "Dark"), (Theme::Auto, "Auto")]
+                    .into_iter()
+                    .map(|(theme, name)| {
+                        let mut item = MenuItem::action(name, Action::Theme(theme));
+                        item.checked = Some(self.prefs.theme == theme);
+                        item
+                    })
+                    .collect();
+                let items = vec![
+                    sync,
+                    MenuItem::separator(),
+                    MenuItem {
+                        label: "Appearance".into(),
+                        action: None,
+                        enabled: true,
+                        children: themes,
+                        checked: None,
+                    },
+                    MenuItem::action("Keyboard shortcuts", Action::Overlay(Overlay::Shortcuts)),
+                ];
+                self.execute(ctx, Action::Menu(items, pos));
             }
             Action::Theme(theme) => self.prefs.theme = theme,
             Action::Basis(id, value) => {
@@ -458,6 +499,20 @@ impl App {
                 } else {
                     self.menu = Some((items, pos));
                 }
+            }
+        }
+    }
+    fn sync_machine_context(&mut self, context: &str) -> bool {
+        match crate::clusters::set_current_context(context) {
+            Ok(()) => {
+                if let Ok(contexts) = &mut self.data.contexts {
+                    contexts.current = Some(context.to_owned());
+                }
+                true
+            }
+            Err(e) => {
+                self.notify(format!("Could not switch your machine's context: {e}"), true);
+                false
             }
         }
     }
@@ -1129,8 +1184,9 @@ impl App {
         let footer = rect(r.left(), r.bottom() - 44.0, r.width(), 44.0);
         line(ui, footer.left_top(), footer.right_top(), t.line);
         let mut x = r.left() + 12.0;
+        let compact = r.width() < 276.0;
         ui.painter().rect_filled(
-            rect(x, footer.top() + 8.0, 174.0, 27.4),
+            rect(x, footer.top() + 8.0, if compact { 90.0 } else { 174.0 }, 27.4),
             6,
             t.selected.gamma_multiply(0.6),
         );
@@ -1139,10 +1195,12 @@ impl App {
             (Theme::Dark, "Dark", "moon", 57.0),
             (Theme::Auto, "Auto", "monitor", 56.0),
         ] {
+            let w = if compact { 30.0 } else { w };
             let rr = rect(x + 2.0, footer.top() + 10.0, w, 23.4);
             let response = ui.interact(rr, ui.id().with(("theme", name)), Sense::click());
             response
                 .widget_info(|| WidgetInfo::selected(WidgetType::RadioButton, true, self.prefs.theme == theme, name));
+            let response = response.on_hover_text(format!("Theme: {name}"));
             if self.prefs.theme == theme {
                 ui.painter().rect_filled(rr, 4, t.bg);
             }
@@ -1152,30 +1210,33 @@ impl App {
                 rect(rr.left() + 8.0, rr.center().y - 6.0, 12.0, 12.0),
                 if self.prefs.theme == theme { t.text } else { t.muted },
             );
-            label(
-                ui,
-                rect(rr.left() + 24.0, rr.top(), w - 26.0, rr.height()),
-                name,
-                11.0,
-                "sans",
-                if self.prefs.theme == theme { t.text } else { t.muted },
-            );
+            if !compact {
+                label(
+                    ui,
+                    rect(rr.left() + 24.0, rr.top(), w - 26.0, rr.height()),
+                    name,
+                    11.0,
+                    "sans",
+                    if self.prefs.theme == theme { t.text } else { t.muted },
+                );
+            }
             if response.clicked() {
                 self.actions.push(Action::Theme(theme));
             }
             x += w;
         }
-        for (n, icon, a) in [
-            (0, "rotate-cw", Action::Reload),
-            (1, "keyboard", Action::Overlay(Overlay::Shortcuts)),
+        for (n, icon, title, a) in [
+            (0, "rotate-cw", "Reload kubeconfig", Action::Reload),
+            (1, "keyboard", "Keyboard shortcuts", Action::Overlay(Overlay::Shortcuts)),
+            (
+                2,
+                "settings",
+                "Settings",
+                Action::Settings(pos2(r.right() - 90.0, footer.top())),
+            ),
         ] {
             let rr = rect(r.right() - 12.0 - 26.0 * (n + 1) as f32, footer.top() + 9.0, 26.0, 26.0);
             let response = ui.interact(rr, ui.id().with(("footer", icon)), Sense::click());
-            let title = if n == 0 {
-                "Reload kubeconfig"
-            } else {
-                "Keyboard shortcuts"
-            };
             response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, title));
             let response = response.on_hover_text(title);
             if response.hovered() {

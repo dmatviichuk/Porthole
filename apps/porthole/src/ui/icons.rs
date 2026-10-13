@@ -24,6 +24,7 @@ pub fn svg(name: &str) -> &'static [u8] {
         "pause" => include_bytes!("../../../../assets/icons/pause.svg"),
         "rotate-cw" => include_bytes!("../../../../assets/icons/rotate-cw.svg"),
         "search" => include_bytes!("../../../../assets/icons/search.svg"),
+        "settings" => include_bytes!("../../../../assets/icons/settings.svg"),
         "square-terminal" => include_bytes!("../../../../assets/icons/square-terminal.svg"),
         "sun" => include_bytes!("../../../../assets/icons/sun.svg"),
         "trash-2" => include_bytes!("../../../../assets/icons/trash-2.svg"),

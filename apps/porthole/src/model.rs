@@ -56,6 +56,7 @@ impl Default for ClusterLabel {
 #[serde(default)]
 pub struct Prefs {
     pub context: Option<String>,
+    pub sync_machine_context: bool,
     pub namespaces: BTreeMap<String, Option<String>>,
     pub theme: Theme,
     pub sidebar_width: f32,
@@ -70,6 +71,7 @@ impl Default for Prefs {
     fn default() -> Self {
         Self {
             context: None,
+            sync_machine_context: false,
             namespaces: BTreeMap::new(),
             theme: Theme::Auto,
             sidebar_width: 236.0,
@@ -428,6 +430,15 @@ pub fn not_started(s: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn machine_context_sync_is_opt_in_and_persists() {
+        let mut prefs: super::Prefs = serde_json::from_str(r#"{"context":"old"}"#).unwrap();
+        assert!(!prefs.sync_machine_context);
+        prefs.sync_machine_context = true;
+        let restored: super::Prefs = serde_json::from_str(&serde_json::to_string(&prefs).unwrap()).unwrap();
+        assert!(restored.sync_machine_context);
+    }
     #[test]
     fn original_formatting() {
         assert_eq!(age(Some(0), 12001), "3h20m");

@@ -109,7 +109,13 @@ impl App {
                         } else if !item.children.is_empty() {
                             ui.menu_button(&item.label, |ui| {
                                 for child in &item.children {
-                                    if ui.add_enabled(child.enabled, Button::new(&child.label)).clicked() {
+                                    if ui
+                                        .add_enabled(
+                                            child.enabled,
+                                            Button::new(&child.label).selected(child.checked == Some(true)),
+                                        )
+                                        .clicked()
+                                    {
                                         if let Some(a) = &child.action {
                                             self.actions.push(a.clone());
                                         }
@@ -119,7 +125,12 @@ impl App {
                                 }
                             });
                         } else if ui
-                            .add_enabled(item.enabled, Button::new(&item.label).frame(false))
+                            .add_enabled(
+                                item.enabled,
+                                Button::new(&item.label)
+                                    .frame(false)
+                                    .selected(item.checked == Some(true)),
+                            )
                             .clicked()
                         {
                             if let Some(a) = item.action {
