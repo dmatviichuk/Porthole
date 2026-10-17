@@ -16,6 +16,7 @@ pub(super) struct State {
     filter: String,
     follow: bool,
     initialized: bool,
+    all_selected: bool,
     cache: HashMap<String, Vec<Part>>,
 }
 pub(super) struct Line {
@@ -97,6 +98,25 @@ impl State {
         if self.lines.len() > 50000 {
             self.lines.drain(..self.lines.len() - 50000);
         }
+    }
+    /// The lines as plain text, with the timestamp and source columns the panel shows.
+    fn plain_text(&self, visible: &[usize], timestamps: bool, labels: Option<&HashMap<String, String>>) -> String {
+        visible
+            .iter()
+            .map(|&i| {
+                let line = &self.lines[i];
+                let mut columns = vec![];
+                if timestamps && let Some(ts) = &line.ts {
+                    columns.push(log_time(ts));
+                }
+                if let Some(labels) = labels {
+                    columns.push(source_label(&self.sources, labels, line.source).to_owned());
+                }
+                columns.push(line.text.clone());
+                columns.join(" ")
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }
 fn targets(resource: &ResourceType, pods: &[ResourceRow], container: Option<&str>) -> Vec<LogTarget> {
@@ -253,6 +273,32 @@ impl App {
             } + if multiple { 162.0 } else { 0.0 };
         let text_width = (body.width() - prefix - 24.0).max(120.0);
         let labels = source_labels(&targets);
+        if ui.input(|i| i.pointer.any_pressed() || i.key_pressed(Key::Escape)) {
+            self.logs.all_selected = false;
+        }
+        let keyboard_free = self.overlay.is_none()
+            && self.delete.is_none()
+            && self.label_draft.is_none()
+            && !self.shell_focus
+            && !ui.ctx().text_edit_focused();
+        // Only on-screen lines have labels, so egui's own select-all stops at the
+        // line that holds the selection. Consumed before the labels see it.
+        if keyboard_free && ui.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::A)) {
+            self.logs.all_selected = true;
+            ui.ctx()
+                .plugin::<text_selection::LabelSelectionState>()
+                .lock()
+                .clear_selection();
+        }
+        if self.logs.all_selected
+            && !visible.is_empty()
+            && ui.input(|i| i.events.iter().any(|e| matches!(e, Event::Copy | Event::Cut)))
+        {
+            let text = self
+                .logs
+                .plain_text(&visible, self.prefs.timestamps, multiple.then_some(&labels));
+            ui.ctx().copy_text(text);
+        }
         let formatted = self.prefs.format_logs;
         let wrap = self.prefs.wrap_logs;
         let layout_key = (if wrap { text_width.to_bits() } else { 0 }, formatted);
@@ -292,100 +338,110 @@ impl App {
         let mut measured_heights = Vec::new();
         ui.scope_builder(UiBuilder::new().max_rect(body), |ui| {
             ui.set_clip_rect(body);
-            let scroll =
-                ScrollArea::new([!wrap, true])
-                    .id_salt("logs-scroll")
-                    .auto_shrink([false, false])
-                    .stick_to_bottom(self.logs.follow)
-                    .show_viewport(ui, |ui, viewport| {
-                        ui.set_min_size(vec2(
-                            if wrap {
-                                body.width()
-                            } else {
-                                body.width().max(
-                                    prefix
-                                        + visible
-                                            .iter()
-                                            .map(|&i| self.logs.lines[i].raw_length as f32 * char_w)
-                                            .fold(0.0, f32::max)
-                                        + 24.0,
-                                )
-                            },
-                            total,
-                        ));
-                        let origin = ui.min_rect().min;
-                        let first = heights.partition_point(|h| *h < viewport.top()).saturating_sub(2);
-                        let last = heights
-                            .partition_point(|h| *h < viewport.bottom() + 40.0)
-                            .min(visible.len());
-                        for shown in first..last {
-                            let index = visible[shown];
-                            let line = &self.logs.lines[index];
-                            let y = origin.y + heights[shown];
-                            let mut x = origin.x + 24.0;
-                            if self.prefs.timestamps {
-                                let timestamp = line.ts.as_deref().map(log_time).unwrap_or_default();
-                                label(ui, rect(x, y, 12.0 * char_w, 19.0), &timestamp, 12.0, "mono", t.faint);
-                                x += 12.0 * char_w + 12.0;
-                            }
-                            if multiple {
-                                let source = self
-                                    .logs
-                                    .sources
-                                    .get(line.source)
-                                    .map(String::as_str)
-                                    .unwrap_or_default();
-                                let text = labels
-                                    .get(source)
-                                    .map(String::as_str)
-                                    .unwrap_or_else(|| source.split('/').nth(1).unwrap_or_default());
-                                label(
-                                    ui,
-                                    rect(x, y, 150.0, 19.0),
-                                    text,
-                                    12.0,
-                                    "mono",
-                                    hex(["#4f9cf9", "#e5a03c", "#3cc97c", "#c47cf0", "#f06f8a", "#3cc3c9"]
-                                        [line.source % 6]),
+            let scroll = ScrollArea::new([!wrap, true])
+                .id_salt("logs-scroll")
+                .auto_shrink([false, false])
+                .stick_to_bottom(self.logs.follow)
+                .show_viewport(ui, |ui, viewport| {
+                    ui.set_min_size(vec2(
+                        if wrap {
+                            body.width()
+                        } else {
+                            body.width().max(
+                                prefix
+                                    + visible
+                                        .iter()
+                                        .map(|&i| self.logs.lines[i].raw_length as f32 * char_w)
+                                        .fold(0.0, f32::max)
+                                    + 24.0,
+                            )
+                        },
+                        total,
+                    ));
+                    let origin = ui.min_rect().min;
+                    let first = heights.partition_point(|h| *h < viewport.top()).saturating_sub(2);
+                    let last = heights
+                        .partition_point(|h| *h < viewport.bottom() + 40.0)
+                        .min(visible.len());
+                    let selection = ui.visuals().selection;
+                    for shown in first..last {
+                        let index = visible[shown];
+                        let line = &self.logs.lines[index];
+                        let y = origin.y + heights[shown];
+                        let parts = if formatted && !line.system {
+                            self.logs
+                                .cache
+                                .entry(line.text.clone())
+                                .or_insert_with(|| parse(&line.text))
+                                .clone()
+                        } else {
+                            vec![Part {
+                                text: line.text.clone(),
+                                tone: if line.system { Tone::Muted } else { Tone::Text },
+                            }]
+                        };
+                        let job = log_job(
+                            &parts,
+                            &self.logs.filter,
+                            t,
+                            if wrap { text_width } else { f32::INFINITY },
+                        );
+                        let mut galley = ui.painter().layout_job(job);
+                        let h = galley.size().y;
+                        if line.layout.is_none_or(|(key, height)| key != layout_key || height != h) {
+                            measured_heights.push((index, h));
+                        }
+                        let leading = galley
+                            .rows
+                            .first()
+                            .and_then(|r| r.glyphs.first())
+                            .map_or(0.0, |glyph| (glyph.line_height - glyph.font_height).max(0.0) / 2.0);
+                        let text_pos = pos2(origin.x + prefix, y + leading);
+                        let selected = self.logs.all_selected;
+                        if selected {
+                            // The drag-selection look, carried across the timestamp and source
+                            // columns of the first row.
+                            if let Some(row) = galley.rows.first() {
+                                let row = row.rect().translate(text_pos.to_vec2());
+                                ui.painter().rect_filled(
+                                    Rect::from_x_y_ranges(origin.x + 24.0..=text_pos.x, row.y_range()),
+                                    0.0,
+                                    selection.bg_fill,
                                 );
-                                x += 162.0;
                             }
-                            let parts = if formatted && !line.system {
-                                self.logs
-                                    .cache
-                                    .entry(line.text.clone())
-                                    .or_insert_with(|| parse(&line.text))
-                                    .clone()
-                            } else {
-                                vec![Part {
-                                    text: line.text.clone(),
-                                    tone: if line.system { Tone::Muted } else { Tone::Text },
-                                }]
-                            };
-                            let job = log_job(
-                                &parts,
-                                &self.logs.filter,
-                                t,
-                                if wrap { text_width } else { f32::INFINITY },
-                            );
-                            let galley = ui.painter().layout_job(job);
-                            let h = galley.size().y;
-                            if line.layout.is_none_or(|(key, height)| key != layout_key || height != h) {
-                                measured_heights.push((index, h));
-                            }
-                            let leading = galley
-                                .rows
-                                .first()
-                                .and_then(|r| r.glyphs.first())
-                                .map_or(0.0, |glyph| (glyph.line_height - glyph.font_height).max(0.0) / 2.0);
-                            // A pre-laid-out galley keeps every message left-aligned. `put`
-                            // centers a LayoutJob in its cell, including each wrapped row.
-                            ui.place(
-                                Rect::from_min_size(pos2(x, y + leading), galley.size()),
-                                Label::new(galley).selectable(true).show_tooltip_when_elided(false),
+                            let all = text_selection::CCursorRange::select_all(&galley);
+                            text_selection::visuals::paint_text_selection(&mut galley, ui.visuals(), &all, None);
+                        }
+                        let mut x = origin.x + 24.0;
+                        if self.prefs.timestamps {
+                            let timestamp = line.ts.as_deref().map(log_time).unwrap_or_default();
+                            let color = if selected { selection.stroke.color } else { t.faint };
+                            label(ui, rect(x, y, 12.0 * char_w, 19.0), &timestamp, 12.0, "mono", color);
+                            x += 12.0 * char_w + 12.0;
+                        }
+                        if multiple {
+                            label(
+                                ui,
+                                rect(x, y, 150.0, 19.0),
+                                source_label(&self.logs.sources, &labels, line.source),
+                                12.0,
+                                "mono",
+                                if selected {
+                                    selection.stroke.color
+                                } else {
+                                    hex(["#4f9cf9", "#e5a03c", "#3cc97c", "#c47cf0", "#f06f8a", "#3cc3c9"]
+                                        [line.source % 6])
+                                },
                             );
                         }
-                    });
+                        // A pre-laid-out galley keeps every message left-aligned. `put`
+                        // centers a LayoutJob in its cell, including each wrapped row.
+                        ui.place(
+                            Rect::from_min_size(text_pos, galley.size()),
+                            Label::new(galley).selectable(true).show_tooltip_when_elided(false),
+                        );
+                    }
+                });
             at_bottom = scroll.state.offset.y + body.height() >= total - 24.0;
         });
         if !measured_heights.is_empty() {
@@ -422,6 +478,13 @@ fn log_time(s: &str) -> String {
     chrono::DateTime::parse_from_rfc3339(s)
         .map(|d| d.with_timezone(&chrono::Local).format("%H:%M:%S%.3f").to_string())
         .unwrap_or_else(|_| s.into())
+}
+fn source_label<'a>(sources: &'a [String], labels: &'a HashMap<String, String>, source: usize) -> &'a str {
+    let source = sources.get(source).map(String::as_str).unwrap_or_default();
+    labels
+        .get(source)
+        .map(String::as_str)
+        .unwrap_or_else(|| source.split('/').nth(1).unwrap_or_default())
 }
 fn source_labels(targets: &[LogTarget]) -> HashMap<String, String> {
     let pods: HashSet<_> = targets.iter().map(|t| t.pod.as_str()).collect();
@@ -687,5 +750,31 @@ mod tests {
         assert_eq!(job.sections.iter().map(|s| s.leading_space).sum::<f32>(), 20.0);
         let p = parse("a ERROR bad");
         assert!(matches!(p[1].tone, Tone::Error));
+    }
+    #[test]
+    fn select_all_copies_the_shown_columns() {
+        let ts = "2026-10-17T10:00:00.123Z";
+        let state = State {
+            sources: vec!["test/api-1/app".into(), "test/api-2/app".into()],
+            lines: vec![
+                Line::new(0, Some(ts.into()), r#"{"msg":"first"}"#.into(), false),
+                Line::new(1, Some(ts.into()), "second".into(), false),
+                Line::new(1, None, "api-2/app: log stream ended".into(), true),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(
+            state.plain_text(&[0, 2], false, None),
+            "{\"msg\":\"first\"}\napi-2/app: log stream ended"
+        );
+        let labels = HashMap::from([
+            ("test/api-1/app".into(), "1".into()),
+            ("test/api-2/app".into(), "2".into()),
+        ]);
+        let time = log_time(ts);
+        assert_eq!(
+            state.plain_text(&[1, 2], true, Some(&labels)),
+            format!("{time} 2 second\n2 api-2/app: log stream ended")
+        );
     }
 }
