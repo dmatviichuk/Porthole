@@ -105,7 +105,7 @@ jobs:
           cache-on-failure: true
       - run: cargo install cargo-packager --version 0.11.8 --locked
       - run: cargo xtask package --profile release --target ${{ matrix.target }}
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: porthole-${{ matrix.target }}
           path: |
