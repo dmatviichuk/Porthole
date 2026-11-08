@@ -13,6 +13,7 @@ pub fn svg(name: &str) -> &'static [u8] {
         "circle-dashed" => include_bytes!("../../../../assets/icons/circle-dashed.svg"),
         "clock" => include_bytes!("../../../../assets/icons/clock.svg"),
         "clock-3" => include_bytes!("../../../../assets/icons/clock-3.svg"),
+        "copy" => include_bytes!("../../../../assets/icons/copy.svg"),
         "folder" => include_bytes!("../../../../assets/icons/folder.svg"),
         "keyboard" => include_bytes!("../../../../assets/icons/keyboard.svg"),
         "layers" => include_bytes!("../../../../assets/icons/layers.svg"),

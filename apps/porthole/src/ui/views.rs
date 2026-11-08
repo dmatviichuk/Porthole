@@ -1042,14 +1042,42 @@ impl App {
             return;
         }
         let t = self.t;
+        let title_max = (r.width() - 332.0).max(0.0);
         label(
             ui,
-            rect(r.left() + 32.0, r.top() + 4.0, r.width() - 300.0, 30.8),
+            rect(r.left() + 32.0, r.top() + 4.0, title_max, 30.8),
             &object,
             22.0,
             "bold",
             t.text,
         );
+        let title_w = text_width(ui, &object, 22.0, "bold").min(title_max);
+        let title = rect(r.left() + 32.0, r.top() + 4.0, title_w, 30.8);
+        if ui
+            .interact(title, ui.scope_id().with("resource-title"), Sense::click())
+            .secondary_clicked()
+        {
+            self.actions.push(Action::Menu(
+                vec![super::MenuItem::action("Copy name", Action::Copy(object.clone()))],
+                title.left_bottom(),
+            ));
+        }
+        let copy = rect(title.right() + 6.0, title.center().y - 12.0, 24.0, 24.0);
+        let response = ui.interact(copy, ui.scope_id().with("copy-name"), Sense::click());
+        response.widget_info(|| WidgetInfo::labeled(Role::Button, true, "Copy name"));
+        let response = response.on_hover_text("Copy name");
+        if response.hovered() {
+            ui.painter().rect_filled(copy, 6, t.hover);
+        }
+        self.icons.paint(
+            ui,
+            "copy",
+            copy.shrink(5.0),
+            if response.hovered() { t.text } else { t.muted },
+        );
+        if response.clicked() {
+            self.actions.push(Action::Copy(object.clone()));
+        }
         label(
             ui,
             rect(r.left() + 32.0, r.top() + 34.8, r.width() - 64.0, 18.2),
