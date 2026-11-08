@@ -86,7 +86,7 @@ impl App {
             25.5,
         );
         let response = button(ui, reload_rect, "reload-yaml", "", 12.5, t.muted, None, None, t);
-        response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, "Reload"));
+        response.widget_info(|| WidgetInfo::labeled(Role::Button, true, "Reload"));
         if response.clicked() {
             reload = true;
         }
@@ -193,7 +193,7 @@ impl App {
                     text::CCursor::new(0),
                     text::CCursor::new(self.yaml.query.chars().count()),
                 )));
-                state.store(ui.ctx(), Id::new("yaml-find"));
+                state.store(ui.ctx(), Id::unique("yaml-find"));
                 self.yaml.find_fresh = false;
             }
             let enabled = !self.yaml.query.is_empty();
@@ -252,11 +252,13 @@ impl App {
             }
             let close = rect(panel.right() - 17.0, panel.top() + 4.0, 12.0, 17.0);
             label(ui, close, "×", 12.5, "sans", t.text);
-            if ui.interact(close, Id::new("yaml-find-close"), Sense::click()).clicked()
+            if ui
+                .interact(close, Id::unique("yaml-find-close"), Sense::click())
+                .clicked()
                 || ui.input(|i| i.key_pressed(Key::Escape))
             {
                 self.yaml.find = false;
-                ui.memory_mut(|m| m.request_focus(Id::new("yaml-editor")));
+                ui.memory_mut(|m| m.request_focus(Id::unique("yaml-editor")));
             }
             if find.has_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
                 jump(&mut self.yaml, !ui.input(|i| i.modifiers.shift));
@@ -289,7 +291,7 @@ impl App {
                     text::CCursor::new(0),
                     text::CCursor::new(count),
                 )));
-                state.store(ui.ctx(), Id::new("yaml-goto"));
+                state.store(ui.ctx(), Id::unique("yaml-goto"));
                 self.yaml.goto_fresh = false;
             }
             let submit = find_button(
@@ -301,7 +303,9 @@ impl App {
             ) || (input.has_focus() && ui.input(|i| i.key_pressed(Key::Enter)));
             let close = rect(panel.right() - 12.0, panel.top() + 5.0, 12.0, 17.0);
             label(ui, close, "×", 12.5, "sans", t.text);
-            let cancel = ui.interact(close, Id::new("yaml-goto-close"), Sense::click()).clicked()
+            let cancel = ui
+                .interact(close, Id::unique("yaml-goto-close"), Sense::click())
+                .clicked()
                 || ui.input(|i| i.key_pressed(Key::Escape));
             if submit
                 && let Some(at) = goto_position(
@@ -313,7 +317,7 @@ impl App {
                 self.yaml.editor.select(at..at);
             }
             if submit || cancel {
-                ui.memory_mut(|m| m.request_focus(Id::new("yaml-editor")));
+                ui.memory_mut(|m| m.request_focus(Id::unique("yaml-editor")));
             } else {
                 self.yaml.goto_line = Some(value);
             }
@@ -400,7 +404,7 @@ fn find_input(ui: &mut Ui, r: Rect, value: &mut String, hint: &str, id: &str) ->
     let response = input.put(
         r.shrink2(vec2(3.0, 1.0)),
         TextEdit::singleline(value)
-            .id(Id::new(id))
+            .id(Id::unique(id))
             .font(font(11.0, "sans"))
             .text_color(Color32::BLACK)
             .hint_text(RichText::new(hint).color(Color32::from_gray(100)))
@@ -423,7 +427,7 @@ fn find_input(ui: &mut Ui, r: Rect, value: &mut String, hint: &str, id: &str) ->
     response
 }
 fn find_button(ui: &mut Ui, r: Rect, text: &str, enabled: bool, t: Tokens) -> bool {
-    let response = ui.interact(r, Id::new(("yaml-find-button", text)), Sense::click());
+    let response = ui.interact(r, Id::unique(("yaml-find-button", text)), Sense::click());
     ui.painter().rect_filled(r, 1, Color32::from_gray(220));
     ui.painter()
         .rect_stroke(r, 1, Stroke::new(1.0, Color32::from_gray(140)), StrokeKind::Inside);
@@ -440,11 +444,11 @@ fn find_button(ui: &mut Ui, r: Rect, text: &str, enabled: bool, t: Tokens) -> bo
             t.text.gamma_multiply(0.4)
         },
     );
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, text));
+    response.widget_info(|| WidgetInfo::labeled(Role::Button, enabled, text));
     enabled && response.clicked()
 }
 fn find_checkbox(ui: &mut Ui, r: Rect, value: &mut bool, text: &str, t: Tokens) {
-    let response = ui.interact(r, Id::new(("yaml-find-checkbox", text)), Sense::click());
+    let response = ui.interact(r, Id::unique(("yaml-find-checkbox", text)), Sense::click());
     if response.clicked() {
         *value = !*value;
     }
@@ -470,7 +474,7 @@ fn find_checkbox(ui: &mut Ui, r: Rect, value: &mut bool, text: &str, t: Tokens) 
         "sans",
         t.text,
     );
-    response.widget_info(|| WidgetInfo::selected(WidgetType::Checkbox, true, *value, text));
+    response.widget_info(|| WidgetInfo::selected(Role::CheckBox, true, *value, text));
 }
 fn unquote(text: &str) -> String {
     let mut out = String::new();

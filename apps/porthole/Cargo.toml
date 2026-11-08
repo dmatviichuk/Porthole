@@ -36,8 +36,8 @@ k8s-openapi.workspace = true
 kube.workspace = true
 
 [build-dependencies]
-winresource = { version = "0.1.31", default-features = false }
+winresource = { version = "0.1.34", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-muda = { version = "0.21.1", default-features = false }
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSView", "NSWindow", "NSColorSpace", "NSResponder"] }
+muda = { version = "0.21.2", default-features = false }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSView", "NSWindow", "NSColorSpace", "NSResponder"] }

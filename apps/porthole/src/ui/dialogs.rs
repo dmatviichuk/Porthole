@@ -29,7 +29,7 @@ fn dialog_input(ui: &mut Ui, r: Rect, value: &mut String, id: &str, family: &str
     let response = ui.place(
         rect(r.left() + 9.0, r.top() + 7.0, r.width() - 18.0, 18.2),
         TextEdit::singleline(value)
-            .id(Id::new(id))
+            .id(Id::unique(id))
             .font(font(13.0, family))
             .layouter(&mut layouter)
             .frame(Frame::NONE)
@@ -97,7 +97,7 @@ impl App {
             return;
         };
         let mut close = false;
-        Area::new(Id::new("context-menu"))
+        Area::new(Id::unique("context-menu"))
             .order(Order::Foreground)
             .fixed_pos(pos)
             .show(ctx, |ui| {
@@ -174,7 +174,7 @@ impl App {
         let mut cancel = false;
         let mut confirm = false;
         let fresh = self.overlay_fresh;
-        let _response = Modal::new(Id::new("delete"))
+        let _response = Modal::new(Id::unique("delete"))
             .frame(frame(t, 20))
             .backdrop_color(Color32::from_black_alpha(102))
             .show(ctx, |ui| {
@@ -315,7 +315,7 @@ impl App {
         let mut save = false;
         let mut remove = false;
         let fresh = self.overlay_fresh;
-        let _response = Modal::new(Id::new("label-cluster"))
+        let _response = Modal::new(Id::unique("label-cluster"))
             .frame(frame(t, 20))
             .backdrop_color(Color32::from_black_alpha(102))
             .show(ctx, |ui| {
@@ -350,11 +350,10 @@ impl App {
                 for (index, (name, color)) in LABEL_COLORS.into_iter().enumerate() {
                     let r = rect(x + index as f32 * 36.0, y, 28.0, 28.0);
                     let response = ui
-                        .interact(r, ui.id().with(("label-color", name)), Sense::click())
+                        .interact(r, ui.scope_id().with(("label-color", name)), Sense::click())
                         .on_hover_text(name);
-                    response.widget_info(|| {
-                        WidgetInfo::selected(WidgetType::RadioButton, true, draft.draft.color == name, name)
-                    });
+                    response
+                        .widget_info(|| WidgetInfo::selected(Role::RadioButton, true, draft.draft.color == name, name));
                     ui.painter().circle_filled(r.center(), 14.0, hex(color));
                     if draft.draft.color == name {
                         ui.painter().circle_stroke(r.center(), 17.0, Stroke::new(2.0, t.text));
@@ -366,9 +365,13 @@ impl App {
                 }
                 y += 28.0 + 16.0;
                 let description = "Ask to type the name before deleting anything";
-                let response = ui.interact(rect(x, y, 378.0, 35.0), ui.id().with("confirm-deletes"), Sense::click());
+                let response = ui.interact(
+                    rect(x, y, 378.0, 35.0),
+                    ui.scope_id().with("confirm-deletes"),
+                    Sense::click(),
+                );
                 response.widget_info(|| {
-                    WidgetInfo::selected(WidgetType::Checkbox, true, draft.draft.confirm_deletes, description)
+                    WidgetInfo::selected(Role::CheckBox, true, draft.draft.confirm_deletes, description)
                 });
                 if response.clicked() {
                     draft.draft.confirm_deletes = !draft.draft.confirm_deletes;
@@ -503,9 +506,9 @@ impl App {
         let mut action = None;
         let mut close = false;
         let screen = ctx.content_rect();
-        let response = Modal::new(Id::new("palette"))
+        let response = Modal::new(Id::unique("palette"))
             .area(
-                Area::new(Id::new("palette"))
+                Area::new(Id::unique("palette"))
                     .order(Order::Foreground)
                     .default_size(vec2(560.0, 530.0))
                     .fixed_pos(pos2(screen.center().x - 280.0, screen.top() + screen.height() * 0.12)),
@@ -530,7 +533,7 @@ impl App {
                         .hint_text("Go to a view, type, namespace, object or cluster…")
                         .frame(Frame::NONE)
                         .margin(0)
-                        .id(Id::new("palette-query")),
+                        .id(Id::unique("palette-query")),
                 );
                 if fresh {
                     response.request_focus();
@@ -588,7 +591,7 @@ impl App {
                             let width = ui.available_width();
                             let rr = rect(o.x + 6.0, o.y, width - 12.0, 30.2);
                             ui.allocate_space(vec2(width, 30.2));
-                            let response = ui.interact(rr, ui.id().with(index), Sense::click());
+                            let response = ui.interact(rr, ui.scope_id().with(index), Sense::click());
                             if index == self.palette_cursor {
                                 ui.painter().rect_filled(rr, 6, t.selected);
                             }
@@ -828,7 +831,7 @@ impl App {
     fn shortcuts_dialog(&mut self, ctx: &Context) {
         let t = self.t;
         let mut done = false;
-        let response = Modal::new(Id::new("shortcuts"))
+        let response = Modal::new(Id::unique("shortcuts"))
             .frame(frame(t, 20))
             .backdrop_color(Color32::from_black_alpha(102))
             .show(ctx, |ui| {
@@ -844,8 +847,8 @@ impl App {
                     t.text,
                 );
                 let done_rect = rect(origin.x + 570.5, origin.y, 27.5, 27.5);
-                let response = ui.interact(done_rect, ui.id().with("shortcuts-close"), Sense::click());
-                response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, "Close keyboard shortcuts"));
+                let response = ui.interact(done_rect, ui.scope_id().with("shortcuts-close"), Sense::click());
+                response.widget_info(|| WidgetInfo::labeled(Role::Button, true, "Close keyboard shortcuts"));
                 if response.hovered() {
                     ui.painter().rect_filled(done_rect, 6, t.hover);
                 }
@@ -946,7 +949,7 @@ impl App {
         if self.notices.is_empty() {
             return;
         }
-        Area::new(Id::new("notices"))
+        Area::new(Id::unique("notices"))
             .order(Order::Tooltip)
             .anchor(Align2::RIGHT_BOTTOM, vec2(-24.0, -24.0))
             .show(ctx, |ui| {

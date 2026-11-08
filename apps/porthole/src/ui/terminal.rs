@@ -7,7 +7,7 @@ impl App {
         let resize = ui
             .interact(
                 rect(r.left(), r.top() - 4.0, r.width(), 8.0),
-                ui.id().with("dock-resize"),
+                ui.scope_id().with("dock-resize"),
                 Sense::drag(),
             )
             .on_hover_cursor(CursorIcon::ResizeVertical);
@@ -50,20 +50,20 @@ impl App {
             );
             let response = ui.interact(
                 rect(x, rr.top(), width - 20.0, rr.height()),
-                ui.id().with(("shell-tab", s.key)),
+                ui.scope_id().with(("shell-tab", s.key)),
                 Sense::click(),
             );
             response
                 .clone()
                 .on_hover_text(format!("{} / {} / {} / {}", s.context, s.namespace, s.pod, s.container));
-            response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, &title));
+            response.widget_info(|| WidgetInfo::labeled(Role::Button, true, &title));
             if response.clicked() {
                 self.actions.push(Action::ActiveShell(s.key));
             }
             let close = rect(rr.right() - 18.0, rr.center().y - 8.0, 16.0, 16.0);
             self.icons.paint(ui, "x", close.shrink(2.0), t.muted);
             if ui
-                .interact(close, ui.id().with(("close-shell", s.key)), Sense::click())
+                .interact(close, ui.scope_id().with(("close-shell", s.key)), Sense::click())
                 .clicked()
             {
                 self.actions.push(Action::CloseShell(s.key));
@@ -82,10 +82,13 @@ impl App {
         if cols != s.cols || rows != s.rows {
             s.cols = cols;
             s.rows = rows;
-            s.parser.screen_mut().set_size(rows, cols);
+            s.parser.screen_mut().set_size(
+                rows.try_into().unwrap_or(std::num::NonZeroU16::MIN),
+                cols.try_into().unwrap_or(std::num::NonZeroU16::MIN),
+            );
             let _ = self.data.resize(s.session, cols, rows);
         }
-        let response = ui.interact(body, Id::new(("terminal", s.key)), Sense::click_and_drag());
+        let response = ui.interact(body, Id::unique(("terminal", s.key)), Sense::click_and_drag());
         if response.clicked() {
             self.shell_focus = true;
             response.request_focus();

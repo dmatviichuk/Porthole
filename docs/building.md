@@ -1,6 +1,6 @@
 # Building from source
 
-Install Rust 1.99.0 through [rustup](https://rustup.rs). The repository and CI pin that exact toolchain.
+Install Rust 1.99.1 through [rustup](https://rustup.rs). The repository and CI pin that exact toolchain.
 macOS needs Xcode Command Line Tools. Windows needs Microsoft C++ Build Tools.
 On Debian/Ubuntu install `build-essential pkg-config libfontconfig1-dev libxkbcommon-dev libx11-dev libxcb1-dev libgl1-mesa-dev`.
 

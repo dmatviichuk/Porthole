@@ -454,7 +454,11 @@ impl App {
                     pod: pod.name,
                     container,
                     session,
-                    parser: vt100::Parser::new(12, 120, 10000),
+                    parser: vt100::Parser::new(
+                        const { std::num::NonZeroU16::new(12).unwrap() },
+                        const { std::num::NonZeroU16::new(120).unwrap() },
+                        10000,
+                    ),
                     ended: false,
                     cols: 120,
                     rows: 12,
@@ -462,12 +466,12 @@ impl App {
                 });
                 self.active_shell = Some(key);
                 self.shell_focus = true;
-                ctx.memory_mut(|m| m.request_focus(Id::new(("terminal", key))));
+                ctx.memory_mut(|m| m.request_focus(Id::unique(("terminal", key))));
             }
             Action::ActiveShell(key) => {
                 self.active_shell = Some(key);
                 self.shell_focus = true;
-                ctx.memory_mut(|m| m.request_focus(Id::new(("terminal", key))));
+                ctx.memory_mut(|m| m.request_focus(Id::unique(("terminal", key))));
             }
             Action::CloseShell(key) => {
                 if let Some(at) = self.shells.iter().position(|s| s.key == key) {
@@ -484,7 +488,7 @@ impl App {
                     } else if self.shell_focus
                         && let Some(key) = self.active_shell
                     {
-                        ctx.memory_mut(|m| m.request_focus(Id::new(("terminal", key))));
+                        ctx.memory_mut(|m| m.request_focus(Id::unique(("terminal", key))));
                     }
                 }
             }
@@ -605,7 +609,7 @@ impl App {
                         self.shell_focus = !self.shell_focus && self.active_shell.is_some();
                         if let Some(key) = self.active_shell {
                             ctx.memory_mut(|m| {
-                                let id = Id::new(("terminal", key));
+                                let id = Id::unique(("terminal", key));
                                 if self.shell_focus {
                                     m.request_focus(id);
                                 } else {
@@ -815,7 +819,7 @@ impl App {
     }
     fn topbar(&mut self, ui: &mut Ui, r: Rect) {
         let t = self.t;
-        let drag = ui.interact(r, ui.id().with("titlebar"), Sense::click_and_drag());
+        let drag = ui.interact(r, ui.scope_id().with("titlebar"), Sense::click_and_drag());
         if drag.drag_started() {
             ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
         }
@@ -832,7 +836,7 @@ impl App {
         .enumerate()
         {
             let rr = rect(r.left() + 16.0 + i as f32 * 29.0, r.top() + 13.5, 25.0, 25.0);
-            let response = ui.interact(rr, ui.id().with(("navigation", i)), Sense::click());
+            let response = ui.interact(rr, ui.scope_id().with(("navigation", i)), Sense::click());
             self.icons.paint(
                 ui,
                 icon,
@@ -960,7 +964,7 @@ impl App {
         let handle = ui
             .interact(
                 rect(r.right() - 4.0, r.top(), 8.0, r.height()),
-                ui.id().with("sidebar-resize"),
+                ui.scope_id().with("sidebar-resize"),
                 Sense::click_and_drag(),
             )
             .on_hover_cursor(CursorIcon::ResizeHorizontal);
@@ -982,7 +986,7 @@ impl App {
         }
         let traffic = ui.interact(
             rect(r.left(), r.top(), r.width(), 48.0),
-            ui.id().with("sidebar-titlebar"),
+            ui.scope_id().with("sidebar-titlebar"),
             Sense::drag(),
         );
         if traffic.drag_started() {
@@ -992,8 +996,8 @@ impl App {
             .data
             .rows(&self.context, &model::resource("Namespace"), None, None, false);
         let cluster = rect(r.left() + 10.0, r.top() + 48.0, r.width() - 20.0, 47.6);
-        let response = ui.interact(cluster, ui.id().with("clusters"), Sense::click());
-        response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, &self.context));
+        let response = ui.interact(cluster, ui.scope_id().with("clusters"), Sense::click());
+        response.widget_info(|| WidgetInfo::labeled(Role::Button, true, &self.context));
         if response.hovered() {
             ui.painter().rect_filled(cluster, 6, t.selected);
         }
@@ -1197,9 +1201,8 @@ impl App {
         ] {
             let w = if compact { 30.0 } else { w };
             let rr = rect(x + 2.0, footer.top() + 10.0, w, 23.4);
-            let response = ui.interact(rr, ui.id().with(("theme", name)), Sense::click());
-            response
-                .widget_info(|| WidgetInfo::selected(WidgetType::RadioButton, true, self.prefs.theme == theme, name));
+            let response = ui.interact(rr, ui.scope_id().with(("theme", name)), Sense::click());
+            response.widget_info(|| WidgetInfo::selected(Role::RadioButton, true, self.prefs.theme == theme, name));
             let response = response.on_hover_text(format!("Theme: {name}"));
             if self.prefs.theme == theme {
                 ui.painter().rect_filled(rr, 4, t.bg);
@@ -1236,8 +1239,8 @@ impl App {
             ),
         ] {
             let rr = rect(r.right() - 12.0 - 26.0 * (n + 1) as f32, footer.top() + 9.0, 26.0, 26.0);
-            let response = ui.interact(rr, ui.id().with(("footer", icon)), Sense::click());
-            response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, title));
+            let response = ui.interact(rr, ui.scope_id().with(("footer", icon)), Sense::click());
+            response.widget_info(|| WidgetInfo::labeled(Role::Button, true, title));
             let response = response.on_hover_text(title);
             if response.hovered() {
                 ui.painter().rect_filled(rr, 6, t.selected);
@@ -1250,7 +1253,7 @@ impl App {
     }
     fn nav_item(&mut self, ui: &mut Ui, r: Rect, name: &str, icon: &str, active: bool, action: Action) -> Response {
         let t = self.t;
-        let response = ui.interact(r, ui.id().with(("nav", name)), Sense::click());
+        let response = ui.interact(r, ui.scope_id().with(("nav", name)), Sense::click());
         if active || response.hovered() {
             ui.painter()
                 .rect_filled(r, 6, if active { t.selected } else { t.hover });
@@ -1269,7 +1272,7 @@ impl App {
             if active { "medium" } else { "sans" },
             t.text,
         );
-        response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, name));
+        response.widget_info(|| WidgetInfo::labeled(Role::Button, true, name));
         if response.clicked() {
             self.actions.push(action);
         }

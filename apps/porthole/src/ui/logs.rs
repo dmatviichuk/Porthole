@@ -442,7 +442,7 @@ impl App {
                         );
                     }
                 });
-            at_bottom = scroll.state.offset.y + body.height() >= total - 24.0;
+            at_bottom = scroll.state.clamped_offset().y + body.height() >= total - 24.0;
         });
         if !measured_heights.is_empty() {
             for (index, height) in measured_heights {

@@ -34,7 +34,7 @@ pub fn wrap(ui: &Ui, r: Rect, text: &str, size: f32, family: &str, color: Color3
     height
 }
 fn page_scroll(ui: &mut Ui, r: Rect, name: &str) -> ScrollArea {
-    let focus = ui.interact(r, ui.id().with((name, "focus")), Sense::click());
+    let focus = ui.interact(r, ui.scope_id().with((name, "focus")), Sense::click());
     if focus.clicked() || ui.memory(|m| m.focused().is_none()) {
         focus.request_focus();
     }
@@ -42,7 +42,7 @@ fn page_scroll(ui: &mut Ui, r: Rect, name: &str) -> ScrollArea {
     if focus.has_focus() {
         let old = scroll_area::State::load(ui.ctx(), ui.make_persistent_id(name))
             .unwrap_or_default()
-            .offset
+            .clamped_offset()
             .y;
         let offset = ui.input_mut(|i| {
             for (key, delta) in [
@@ -344,7 +344,7 @@ impl App {
         );
         let refresh = ui.interact(
             rect(nav.right() - 32.0, nav.top(), 20.0, 24.0),
-            ui.id().with("rediscover"),
+            ui.scope_id().with("rediscover"),
             Sense::click(),
         );
         self.icons.paint(
@@ -414,8 +414,8 @@ impl App {
                         let rr = rect(o.x + 8.0, o.y, 194.0, 24.2);
                         ui.allocate_space(vec2(210.0, 32.2));
                         let active = resource.is_none();
-                        let response = ui.interact(rr, ui.id().with("all-types"), Sense::click());
-                        response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, "All types"));
+                        let response = ui.interact(rr, ui.scope_id().with("all-types"), Sense::click());
+                        response.widget_info(|| WidgetInfo::labeled(Role::Button, true, "All types"));
                         if active || response.hovered() {
                             ui.painter()
                                 .rect_filled(rr, 6, if active { t.selected } else { t.hover });
@@ -444,7 +444,7 @@ impl App {
                                 .as_ref()
                                 .is_some_and(|r| model::type_key(&info.resource) == model::type_key(r));
                             let response =
-                                ui.interact(rr, ui.id().with(model::type_key(&info.resource)), Sense::click());
+                                ui.interact(rr, ui.scope_id().with(model::type_key(&info.resource)), Sense::click());
                             if active || response.hovered() {
                                 ui.painter()
                                     .rect_filled(rr, 6, if active { t.selected } else { t.hover });
@@ -721,8 +721,8 @@ impl App {
             rect(select.right() - 15.0, select.center().y - 6.5, 13.0, 13.0),
             t.text,
         );
-        let response = ui.interact(select, ui.id().with((id, "basis")), Sense::click());
-        response.widget_info(|| WidgetInfo::labeled(WidgetType::ComboBox, true, title));
+        let response = ui.interact(select, ui.scope_id().with((id, "basis")), Sense::click());
+        response.widget_info(|| WidgetInfo::labeled(Role::ComboBox, true, title));
         if response.clicked() {
             let items = [("usage", "Usage"), ("requests", "Requests"), ("limits", "Limits")]
                 .into_iter()
@@ -1090,7 +1090,7 @@ impl App {
             "sans",
             t.failed,
         );
-        response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, "Delete"));
+        response.widget_info(|| WidgetInfo::labeled(Role::Button, true, "Delete"));
         if response.clicked() {
             self.actions
                 .push(Action::Delete(resource.clone(), namespace.clone(), object.clone()));
@@ -1402,7 +1402,10 @@ impl App {
                         }
                     } else if title == "Node" {
                         label(ui, vr, value, 13.0, "sans", t.accent);
-                        if ui.interact(vr, ui.id().with("node-link"), Sense::click()).clicked() {
+                        if ui
+                            .interact(vr, ui.scope_id().with("node-link"), Sense::click())
+                            .clicked()
+                        {
                             self.actions.push(Action::Navigate(View::Resource {
                                 resource: model::resource("Node"),
                                 namespace: None,
@@ -1440,7 +1443,11 @@ impl App {
                             "sans",
                             t.muted,
                         );
-                        if clickable && ui.interact(vr, ui.id().with("owner-link"), Sense::click()).clicked() {
+                        if clickable
+                            && ui
+                                .interact(vr, ui.scope_id().with("owner-link"), Sense::click())
+                                .clicked()
+                        {
                             self.actions.push(Action::Navigate(View::Resource {
                                 resource: r,
                                 namespace: row.namespace.clone(),
@@ -1856,7 +1863,7 @@ impl App {
                     "mono-bold",
                     t.text,
                 );
-                if ui.interact(rr, ui.id().with(&id), Sense::click()).clicked() {
+                if ui.interact(rr, ui.scope_id().with(&id), Sense::click()).clicked() {
                     if open {
                         self.expanded.remove(&id);
                     } else {
@@ -1990,7 +1997,7 @@ impl App {
                 label(ui, name_r, &name, 13.0, "sans", self.t.text);
                 if let Some(row) = row
                     && ui
-                        .interact(name_r, ui.id().with(("configmap", &name)), Sense::click())
+                        .interact(name_r, ui.scope_id().with(("configmap", &name)), Sense::click())
                         .clicked()
                 {
                     self.actions.push(Action::Navigate(Self::resource_view(
@@ -2055,7 +2062,7 @@ impl App {
                                     "mono",
                                     self.t.accent,
                                 );
-                                if ui.interact(rr, ui.id().with(&id), Sense::click()).clicked() {
+                                if ui.interact(rr, ui.scope_id().with(&id), Sense::click()).clicked() {
                                     if open {
                                         self.expanded.remove(&id);
                                     } else {
@@ -2216,8 +2223,8 @@ impl App {
                 cells.push(galley);
             }
             let rr = rect(r.left(), y, r.width(), height);
-            let response = ui.interact(rr, ui.id().with(("related", kind, &row.uid)), Sense::click());
-            response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, &row.name));
+            let response = ui.interact(rr, ui.scope_id().with(("related", kind, &row.uid)), Sense::click());
+            response.widget_info(|| WidgetInfo::labeled(Role::Button, true, &row.name));
             if response.hovered() {
                 // Keep every column aligned while giving the hover tint breathing room.
                 let hover = rr.expand2(vec2(8.0, 0.0));

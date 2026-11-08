@@ -1192,7 +1192,7 @@ impl Editor {
                 })
             });
         }
-        let id = Id::new("yaml-editor");
+        let id = Id::unique("yaml-editor");
         text_edit::TextEditState::default().store(ui.ctx(), id);
         let response = ui.interact(rect, id, Sense::click_and_drag());
         if ui.memory(|m| m.focused().is_none()) {

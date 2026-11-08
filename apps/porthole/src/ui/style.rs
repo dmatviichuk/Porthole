@@ -408,7 +408,7 @@ pub fn button_with_font(
     border: Option<Color32>,
     t: Tokens,
 ) -> Response {
-    let response = ui.interact(r, ui.id().with(id), Sense::click());
+    let response = ui.interact(r, ui.scope_id().with(id), Sense::click());
     // egui already applies disabled_alpha to the painter.
     let opacity = 1.0;
     if let Some(bg) = bg {
@@ -429,7 +429,7 @@ pub fn button_with_font(
         family,
         color.gamma_multiply(opacity),
     );
-    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), text));
+    response.widget_info(|| WidgetInfo::labeled(Role::Button, ui.is_enabled(), text));
     response
 }
 pub fn search(ui: &mut Ui, r: Rect, value: &mut String, placeholder: &str, id: &str, t: Tokens) -> Response {
@@ -442,11 +442,11 @@ pub fn search(ui: &mut Ui, r: Rect, value: &mut String, placeholder: &str, id: &
     let response = input.put(
         rect(r.left() + 27.0, r.top() + 3.5, r.width() - 34.0, r.height() - 7.0),
         TextEdit::singleline(value)
-            .id(Id::new(id))
+            .id(Id::unique(id))
             .font(font(13.0, "sans"))
             .layouter(&mut layouter)
             .text_color(t.text)
-            .vertical_align(Align::Center)
+            .align(Align2::LEFT_CENTER)
             .hint_text(RichText::new(placeholder).color(t.faint))
             .frame(Frame::NONE)
             .margin(0),

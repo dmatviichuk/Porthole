@@ -187,7 +187,7 @@ pub fn show(
     if !rows.is_empty() {
         state.cursor = Some(rows[sorted[cursor]].id.clone());
     }
-    let table_id = ui.id().with(options.id);
+    let table_id = ui.scope_id().with(options.id);
     let response = ui.interact(r, table_id, Sense::click());
     if options.primary && ui.ctx().memory(|m| m.focused().is_none()) {
         response.request_focus();
@@ -276,8 +276,8 @@ pub fn show(
                 let mut x = origin.x + 24.0;
                 for (c, &w) in ordered.iter().zip(&tracks) {
                     let hr = rect(x, origin.y, w, 32.0);
-                    let response = ui.interact(hr, ui.id().with(("column", &c.id)), Sense::click_and_drag());
-                    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, &c.title));
+                    let response = ui.interact(hr, ui.scope_id().with(("column", &c.id)), Sense::click_and_drag());
+                    response.widget_info(|| WidgetInfo::labeled(Role::Button, true, &c.title));
                     let is_sort = state.sort == c.id;
                     label(
                         ui,
@@ -368,10 +368,10 @@ pub fn show(
                         if keyboard_menu == Some(index) {
                             events.push(Event::Menu(row_index, rr.left_bottom()));
                         }
-                        let response = ui.interact(rr, ui.id().with(("row", &row.id)), Sense::click());
+                        let response = ui.interact(rr, ui.scope_id().with(("row", &row.id)), Sense::click());
                         response.widget_info(|| {
                             WidgetInfo::labeled(
-                                WidgetType::Button,
+                                Role::Button,
                                 true,
                                 row.cells
                                     .get("name")
@@ -412,8 +412,9 @@ pub fn show(
                             line(ui, pos2(x, rr.bottom()), pos2(x + w, rr.bottom()), t.line);
                             if c.id == "actions" {
                                 let anchor = rect(cr.left(), cr.center().y - 12.0, 24.0, 24.0);
-                                let response = ui.interact(anchor, ui.id().with(("actions", &row.id)), Sense::click());
-                                response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, true, "Actions"));
+                                let response =
+                                    ui.interact(anchor, ui.scope_id().with(("actions", &row.id)), Sense::click());
+                                response.widget_info(|| WidgetInfo::labeled(Role::Button, true, "Actions"));
                                 if response.hovered() {
                                     ui.painter().rect_filled(anchor, 4, t.selected);
                                 }
@@ -488,7 +489,7 @@ pub fn show(
                             render(ui, index, &mut events, state, icons);
                         }
                     });
-                    state.scroll_offset = output.state.offset.y;
+                    state.scroll_offset = output.state.clamped_offset().y;
                 }
             });
     });
@@ -498,7 +499,7 @@ pub fn show(
     {
         let lift = ui
             .ctx()
-            .animate_bool_responsive(ui.id().with((options.id, "column-lift")), true);
+            .animate_bool_responsive(ui.scope_id().with((options.id, "column-lift")), true);
         let origin = pointer - state.drag_offset + vec2(3.0 * lift, -4.0 * lift);
         let shift = origin - header.min;
         let bottom = drag_rows.last().map_or(header.bottom(), |(r, _)| r.bottom());
@@ -511,7 +512,7 @@ pub fn show(
                 .id_salt((options.id, "floating-column"))
                 .layer_id(LayerId::new(
                     Order::Tooltip,
-                    ui.id().with((options.id, "floating-column")),
+                    ui.scope_id().with((options.id, "floating-column")),
                 ))
                 .max_rect(panel),
         );
@@ -562,7 +563,7 @@ pub fn show(
         ui.ctx().request_repaint();
     } else {
         ui.ctx()
-            .animate_bool_responsive(ui.id().with((options.id, "column-lift")), false);
+            .animate_bool_responsive(ui.scope_id().with((options.id, "column-lift")), false);
     }
     events
 }
