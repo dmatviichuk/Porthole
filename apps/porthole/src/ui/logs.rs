@@ -5,8 +5,19 @@ use crate::{
     resources::ResourceType,
     summary::ResourceRow,
 };
-use eframe::egui::*;
-use std::collections::{HashMap, HashSet};
+use eframe::egui::{
+    text::CCursor,
+    text_selection::{
+        CCursorRange,
+        text_cursor_state::{ccursor_next_word, ccursor_previous_word},
+    },
+    *,
+};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Range,
+    sync::Arc,
+};
 #[derive(Default)]
 pub(super) struct State {
     pub token: u64,
@@ -17,9 +28,16 @@ pub(super) struct State {
     follow: bool,
     initialized: bool,
     all_selected: bool,
+    /// Only on-screen lines are laid out, so egui's label selection drops a
+    /// selection whose ends scroll away. This one is kept by line id instead.
+    selection: Option<Selection>,
+    selecting: bool,
+    next_id: u64,
     cache: HashMap<String, Vec<Part>>,
 }
 pub(super) struct Line {
+    /// Stays with the line while older lines are dropped from the front.
+    id: u64,
     source: usize,
     ts: Option<String>,
     text: String,
@@ -32,6 +50,7 @@ impl Line {
     fn new(source: usize, ts: Option<String>, text: String, system: bool) -> Self {
         let raw_length = text.chars().count();
         Self {
+            id: 0,
             source,
             ts,
             text,
@@ -61,7 +80,53 @@ enum Tone {
     Debug,
     Gap(f32),
 }
+/// A character offset into the text a line shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Point {
+    line: u64,
+    char: usize,
+}
+#[derive(Clone, Copy, Debug)]
+struct Selection {
+    anchor: Point,
+    head: Point,
+    /// Formatting changes the shown text, and the offsets with it.
+    formatted: bool,
+}
+impl Selection {
+    fn ordered(&self) -> (Point, Point) {
+        (self.anchor.min(self.head), self.anchor.max(self.head))
+    }
+    fn is_empty(&self) -> bool {
+        self.anchor == self.head
+    }
+    /// The selected characters of a line that shows `length` characters.
+    fn range(&self, line: u64, length: usize) -> Option<Range<usize>> {
+        let (start, end) = self.ordered();
+        if line < start.line || line > end.line {
+            return None;
+        }
+        let from = if line == start.line { start.char.min(length) } else { 0 };
+        let to = if line == end.line { end.char.min(length) } else { length };
+        Some(from..to.max(from))
+    }
+}
+/// How the panel shows each line.
+struct View<'a> {
+    timestamps: bool,
+    wrap: bool,
+    formatted: bool,
+    /// Source labels, when lines come from more than one container.
+    labels: Option<&'a HashMap<String, String>>,
+}
+/// A line laid out on screen: its index, top, text position and text.
+type Shown = (usize, f32, Pos2, Arc<Galley>);
 impl State {
+    fn push(&mut self, mut line: Line) {
+        line.id = self.next_id;
+        self.next_id += 1;
+        self.lines.push(line);
+    }
     pub fn receive(&mut self, key: String, event: LogEvent) {
         if !self.sessions.contains_key(&key) {
             return;
@@ -75,11 +140,10 @@ impl State {
                 static ANSI: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
                 let re = ANSI.get_or_init(|| regex::Regex::new(r"\x1b\[[0-9;?]*[A-Za-z]").unwrap());
                 for l in lines {
-                    self.lines
-                        .push(Line::new(source, l.ts, re.replace_all(&l.text, "").into_owned(), false));
+                    self.push(Line::new(source, l.ts, re.replace_all(&l.text, "").into_owned(), false));
                 }
             }
-            LogEvent::Ended { .. } => self.lines.push(Line::new(
+            LogEvent::Ended { .. } => self.push(Line::new(
                 source,
                 None,
                 format!(
@@ -88,7 +152,7 @@ impl State {
                 ),
                 true,
             )),
-            LogEvent::Error { message, .. } => self.lines.push(Line::new(
+            LogEvent::Error { message, .. } => self.push(Line::new(
                 source,
                 None,
                 format!("{}: {message}", key.split('/').skip(1).collect::<Vec<_>>().join("/")),
@@ -118,6 +182,348 @@ impl State {
             .collect::<Vec<_>>()
             .join("\n")
     }
+    /// The selected text as the panel shows it, including lines that are off screen.
+    fn selected_text(&self, visible: &[usize], selection: Selection) -> String {
+        let (start, end) = selection.ordered();
+        visible
+            .iter()
+            .map(|&i| &self.lines[i])
+            .filter(|line| (start.line..=end.line).contains(&line.id))
+            .map(|line| {
+                let parts = shown_parts(line, selection.formatted);
+                let length = parts.iter().map(|p| p.text.chars().count()).sum();
+                slice(&parts, selection.range(line.id, length).unwrap_or_default())
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+    /// The lines below the toolbar: virtualised, selectable and copyable.
+    fn show(&mut self, ui: &mut Ui, body: Rect, visible: &[usize], view: &View, keyboard_free: bool, t: Tokens) {
+        let char_w = text_width(ui, "0000000000", 12.0, "mono") / 10.0;
+        let prefix = 24.0
+            + if view.timestamps { 12.0 * char_w + 12.0 } else { 0.0 }
+            + if view.labels.is_some() { 162.0 } else { 0.0 };
+        let text_width = (body.width() - prefix - 24.0).max(120.0);
+        if ui.input(|i| i.pointer.any_pressed() || i.key_pressed(Key::Escape)) {
+            self.all_selected = false;
+        }
+        if ui.input(|i| i.key_pressed(Key::Escape)) || self.selection.is_some_and(|s| s.formatted != view.formatted) {
+            self.selection = None;
+        }
+        // Only on-screen lines are laid out, so egui's own select-all would stop
+        // at the line that holds the selection. Consumed before anything sees it.
+        if keyboard_free && ui.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::A)) {
+            self.all_selected = true;
+            self.selection = None;
+        }
+        if keyboard_free && ui.input(|i| i.events.iter().any(|e| matches!(e, Event::Copy | Event::Cut))) {
+            let text = if self.all_selected {
+                self.plain_text(visible, view.timestamps, view.labels)
+            } else if let Some(selection) = self.selection.filter(|s| !s.is_empty()) {
+                self.selected_text(visible, selection)
+            } else {
+                String::new()
+            };
+            if !text.is_empty() {
+                ui.ctx().copy_text(text);
+            }
+        }
+        let formatted = view.formatted;
+        let wrap = view.wrap;
+        let layout_key = (if wrap { text_width.to_bits() } else { 0 }, formatted);
+        let mut heights = Vec::with_capacity(visible.len() + 1);
+        heights.push(0.0);
+        for &i in visible {
+            let line = &self.lines[i];
+            let height = line
+                .layout
+                .filter(|(key, _)| *key == layout_key)
+                .map(|(_, h)| h)
+                .unwrap_or_else(|| {
+                    if !wrap {
+                        return 19.0;
+                    }
+                    let (characters, gaps) = if formatted && !line.system {
+                        *line.display_length.get_or_init(|| {
+                            parse(&line.text).iter().fold((0, 0.0), |(characters, gaps), part| {
+                                (
+                                    characters + part.text.chars().count(),
+                                    gaps + if let Tone::Gap(w) = part.tone { w } else { 0.0 },
+                                )
+                            })
+                        })
+                    } else {
+                        (line.raw_length, 0.0)
+                    };
+                    19.0 * ((characters as f32 * char_w + gaps) / text_width).ceil().max(1.0)
+                });
+            heights.push(heights.last().copied().unwrap() + height);
+        }
+        if self.cache.len() > 5000 {
+            self.cache.clear();
+        }
+        let total = *heights.last().unwrap_or(&0.0);
+        // A press on the lines holds them still, so the text under the pointer
+        // stays put while new lines arrive.
+        let holding = self.selecting
+            || ui.input(|i| i.pointer.primary_pressed() && i.pointer.press_origin().is_some_and(|p| body.contains(p)));
+        let mut at_bottom = self.follow;
+        let mut measured_heights = Vec::new();
+        ui.scope_builder(UiBuilder::new().max_rect(body), |ui| {
+            ui.set_clip_rect(body);
+            let scroll = ScrollArea::new([!wrap, true])
+                .id_salt("logs-scroll")
+                .auto_shrink([false, false])
+                .stick_to_bottom(self.follow && !holding)
+                .show_viewport(ui, |ui, viewport| {
+                    ui.set_min_size(vec2(
+                        if wrap {
+                            body.width()
+                        } else {
+                            body.width().max(
+                                prefix
+                                    + visible
+                                        .iter()
+                                        .map(|&i| self.lines[i].raw_length as f32 * char_w)
+                                        .fold(0.0, f32::max)
+                                    + 24.0,
+                            )
+                        },
+                        total,
+                    ));
+                    let origin = ui.min_rect().min;
+                    let area = viewport.translate(origin.to_vec2());
+                    let response = ui.interact(area, ui.scope_id().with("log-lines"), Sense::click_and_drag());
+                    let first = heights.partition_point(|h| *h < viewport.top()).saturating_sub(2);
+                    let last = heights
+                        .partition_point(|h| *h < viewport.bottom() + 40.0)
+                        .min(visible.len());
+                    let mut shown: Vec<Shown> = Vec::with_capacity(last.saturating_sub(first));
+                    for (index, top) in visible[first.min(last)..last].iter().zip(&heights[first.min(last)..]) {
+                        let line = &self.lines[*index];
+                        let parts = if formatted && !line.system {
+                            self.cache
+                                .entry(line.text.clone())
+                                .or_insert_with(|| parse(&line.text))
+                                .clone()
+                        } else {
+                            shown_parts(line, false)
+                        };
+                        let job = log_job(&parts, &self.filter, t, if wrap { text_width } else { f32::INFINITY });
+                        let galley = ui.painter().layout_job(job);
+                        let h = galley.size().y;
+                        if line.layout.is_none_or(|(key, height)| key != layout_key || height != h) {
+                            measured_heights.push((*index, h));
+                        }
+                        let leading = galley
+                            .rows
+                            .first()
+                            .and_then(|r| r.glyphs.first())
+                            .map_or(0.0, |glyph| (glyph.line_height - glyph.font_height).max(0.0) / 2.0);
+                        let y = origin.y + top;
+                        shown.push((*index, y, pos2(origin.x + prefix, y + leading), galley));
+                    }
+                    self.select(ui, &response, area, &shown, view);
+                    let visuals = ui.visuals().clone();
+                    let selection = self.selection;
+                    for (index, y, text_pos, mut galley) in shown {
+                        let line = &self.lines[index];
+                        let all = self.all_selected;
+                        if all {
+                            // The drag-selection look, carried across the timestamp and source
+                            // columns of the first row.
+                            if let Some(row) = galley.rows.first() {
+                                let row = row.rect().translate(text_pos.to_vec2());
+                                ui.painter().rect_filled(
+                                    Rect::from_x_y_ranges(origin.x + 24.0..=text_pos.x, row.y_range()),
+                                    0.0,
+                                    visuals.selection.bg_fill,
+                                );
+                            }
+                        }
+                        let range = if all {
+                            Some(0..usize::MAX)
+                        } else {
+                            selection.and_then(|s| s.range(line.id, galley.text().chars().count()))
+                        };
+                        if let Some(range) = range.filter(|r| !r.is_empty()) {
+                            let range = CCursorRange::two(
+                                CCursor::new(range.start),
+                                CCursor::new(range.end.min(galley.text().chars().count())),
+                            );
+                            text_selection::visuals::paint_text_selection(&mut galley, &visuals, &range, None);
+                        }
+                        let mut x = origin.x + 24.0;
+                        if view.timestamps {
+                            let timestamp = line.ts.as_deref().map(log_time).unwrap_or_default();
+                            let color = if all { visuals.selection.stroke.color } else { t.faint };
+                            label(ui, rect(x, y, 12.0 * char_w, 19.0), &timestamp, 12.0, "mono", color);
+                            x += 12.0 * char_w + 12.0;
+                        }
+                        if let Some(labels) = view.labels {
+                            label(
+                                ui,
+                                rect(x, y, 150.0, 19.0),
+                                source_label(&self.sources, labels, line.source),
+                                12.0,
+                                "mono",
+                                if all {
+                                    visuals.selection.stroke.color
+                                } else {
+                                    hex(["#4f9cf9", "#e5a03c", "#3cc97c", "#c47cf0", "#f06f8a", "#3cc3c9"]
+                                        [line.source % 6])
+                                },
+                            );
+                        }
+                        ui.painter().galley(text_pos, galley, t.text);
+                    }
+                });
+            at_bottom = scroll.state.clamped_offset().y + body.height() >= total - 24.0;
+        });
+        if !measured_heights.is_empty() {
+            for (index, height) in measured_heights {
+                self.lines[index].layout = Some((layout_key, height));
+            }
+            ui.ctx().request_repaint();
+        }
+        self.follow = at_bottom;
+    }
+    /// Drag, shift-click, double-click (word) and triple-click (line) selection.
+    fn select(&mut self, ui: &Ui, response: &Response, area: Rect, shown: &[Shown], view: &View) {
+        if response.hovered() || self.selecting {
+            ui.ctx().set_cursor_icon(CursorIcon::Text);
+        }
+        // The line and character under a point, clamped to the lines on screen.
+        let hit = |pos: Pos2| -> Option<(usize, usize)> {
+            let pos = pos.clamp(area.min, area.max);
+            let at = shown.iter().rposition(|(_, y, ..)| *y <= pos.y).unwrap_or(0);
+            let (_, _, text_pos, galley) = shown.get(at)?;
+            let local = pos - *text_pos;
+            let char = if local.y >= galley.size().y {
+                galley.text().chars().count()
+            } else {
+                galley.cursor_from_pos(local).index.0
+            };
+            Some((at, char))
+        };
+        let point = |(at, char): (usize, usize)| Point {
+            line: self.lines[shown[at].0].id,
+            char,
+        };
+        let (pressed, down, shift, pointer) = ui.input(|i| {
+            (
+                i.pointer.primary_pressed(),
+                i.pointer.primary_down(),
+                i.modifiers.shift,
+                i.pointer.interact_pos(),
+            )
+        });
+        let target = pointer.and_then(hit);
+        if pressed && response.is_pointer_button_down_on() {
+            if let Some(target) = target {
+                let head = point(target);
+                let anchor = match self.selection {
+                    Some(s) if shift => s.anchor,
+                    _ => head,
+                };
+                self.selection = Some(Selection {
+                    anchor,
+                    head,
+                    formatted: view.formatted,
+                });
+                self.selecting = true;
+            }
+        } else if self.selecting && down {
+            if let (Some(selection), Some(target)) = (&mut self.selection, target) {
+                selection.head = point(target);
+            }
+            // Dragging past an edge scrolls toward it.
+            if let Some(p) = pointer {
+                let delta = vec2(
+                    if view.wrap { 0.0 } else { overshoot(p.x, area.x_range()) },
+                    overshoot(p.y, area.y_range()),
+                );
+                if delta != Vec2::ZERO {
+                    ui.scroll_with_delta_animation(delta, style::ScrollAnimation::none());
+                    ui.ctx().request_repaint();
+                }
+            }
+        }
+        if !down {
+            self.selecting = false;
+        }
+        let clicks = if response.triple_clicked() {
+            3
+        } else if response.double_clicked() {
+            2
+        } else {
+            0
+        };
+        if clicks > 0
+            && let Some((at, char)) = target
+        {
+            let text = shown[at].3.text();
+            let (from, to) = if clicks == 3 {
+                (0, text.chars().count())
+            } else {
+                let c = CCursor::new(char);
+                (
+                    ccursor_previous_word(text, c).index.0,
+                    ccursor_next_word(text, c).index.0,
+                )
+            };
+            self.selection = Some(Selection {
+                anchor: point((at, from)),
+                head: point((at, to)),
+                formatted: view.formatted,
+            });
+        }
+        if !self.selecting && self.selection.is_some_and(|s| s.is_empty()) {
+            self.selection = None;
+        }
+    }
+}
+/// How far a point lies outside a range, as a scroll delta toward it.
+fn overshoot(at: f32, range: Rangef) -> f32 {
+    if at < range.min {
+        range.min - at
+    } else if at > range.max {
+        range.max - at
+    } else {
+        0.0
+    }
+}
+/// The parts a line shows: its fields when formatted, else the text as received.
+fn shown_parts(line: &Line, formatted: bool) -> Vec<Part> {
+    if formatted && !line.system {
+        parse(&line.text)
+    } else {
+        vec![Part {
+            text: line.text.clone(),
+            tone: if line.system { Tone::Muted } else { Tone::Text },
+        }]
+    }
+}
+/// The characters of `range` in the shown parts. A gap between fields inside
+/// the range copies as one space.
+fn slice(parts: &[Part], range: Range<usize>) -> String {
+    let mut text = String::new();
+    let mut at = 0;
+    for part in parts {
+        if let Tone::Gap(_) = part.tone {
+            if at > range.start && at < range.end && !text.ends_with(' ') {
+                text.push(' ');
+            }
+            continue;
+        }
+        for c in part.text.chars() {
+            if range.contains(&at) {
+                text.push(c);
+            }
+            at += 1;
+        }
+    }
+    text
 }
 fn targets(resource: &ResourceType, pods: &[ResourceRow], container: Option<&str>) -> Vec<LogTarget> {
     pods.iter()
@@ -237,6 +643,7 @@ impl App {
         let clear = rect(r.right() - 82.0, r.top() + 3.0, 58.0, 22.8);
         if button(ui, clear, "clear-logs", "Clear", 12.0, t.text, None, Some(t.strong), t).clicked() {
             self.logs.lines.clear();
+            self.logs.selection = None;
             visible.clear();
         }
         let info = format!(
@@ -263,195 +670,20 @@ impl App {
         );
         let body = rect(r.left(), r.top() + 36.0, r.width(), r.height() - 36.0);
         line(ui, body.left_top(), body.right_top(), t.line);
-        let multiple = targets.len() > 1;
-        let char_w = text_width(ui, "0000000000", 12.0, "mono") / 10.0;
-        let prefix =
-            24.0 + if self.prefs.timestamps {
-                12.0 * char_w + 12.0
-            } else {
-                0.0
-            } + if multiple { 162.0 } else { 0.0 };
-        let text_width = (body.width() - prefix - 24.0).max(120.0);
         let labels = source_labels(&targets);
-        if ui.input(|i| i.pointer.any_pressed() || i.key_pressed(Key::Escape)) {
-            self.logs.all_selected = false;
-        }
+        let view = View {
+            timestamps: self.prefs.timestamps,
+            wrap: self.prefs.wrap_logs,
+            formatted: self.prefs.format_logs,
+            labels: (targets.len() > 1).then_some(&labels),
+        };
         let keyboard_free = self.overlay.is_none()
             && self.delete.is_none()
             && self.label_draft.is_none()
             && !self.shell_focus
             && !ui.ctx().text_edit_focused();
-        // Only on-screen lines have labels, so egui's own select-all stops at the
-        // line that holds the selection. Consumed before the labels see it.
-        if keyboard_free && ui.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::A)) {
-            self.logs.all_selected = true;
-            ui.ctx()
-                .plugin::<text_selection::LabelSelectionState>()
-                .lock()
-                .clear_selection();
-        }
-        if self.logs.all_selected
-            && !visible.is_empty()
-            && ui.input(|i| i.events.iter().any(|e| matches!(e, Event::Copy | Event::Cut)))
-        {
-            let text = self
-                .logs
-                .plain_text(&visible, self.prefs.timestamps, multiple.then_some(&labels));
-            ui.ctx().copy_text(text);
-        }
-        let formatted = self.prefs.format_logs;
-        let wrap = self.prefs.wrap_logs;
-        let layout_key = (if wrap { text_width.to_bits() } else { 0 }, formatted);
-        let mut heights = Vec::with_capacity(visible.len() + 1);
-        heights.push(0.0);
-        for &i in &visible {
-            let line = &self.logs.lines[i];
-            let height = line
-                .layout
-                .filter(|(key, _)| *key == layout_key)
-                .map(|(_, h)| h)
-                .unwrap_or_else(|| {
-                    if !wrap {
-                        return 19.0;
-                    }
-                    let (characters, gaps) = if formatted && !line.system {
-                        *line.display_length.get_or_init(|| {
-                            parse(&line.text).iter().fold((0, 0.0), |(characters, gaps), part| {
-                                (
-                                    characters + part.text.chars().count(),
-                                    gaps + if let Tone::Gap(w) = part.tone { w } else { 0.0 },
-                                )
-                            })
-                        })
-                    } else {
-                        (line.raw_length, 0.0)
-                    };
-                    19.0 * ((characters as f32 * char_w + gaps) / text_width).ceil().max(1.0)
-                });
-            heights.push(heights.last().copied().unwrap() + height);
-        }
-        if self.logs.cache.len() > 5000 {
-            self.logs.cache.clear();
-        }
-        let total = *heights.last().unwrap_or(&0.0);
-        let mut at_bottom = self.logs.follow;
-        let mut measured_heights = Vec::new();
-        ui.scope_builder(UiBuilder::new().max_rect(body), |ui| {
-            ui.set_clip_rect(body);
-            let scroll = ScrollArea::new([!wrap, true])
-                .id_salt("logs-scroll")
-                .auto_shrink([false, false])
-                .stick_to_bottom(self.logs.follow)
-                .show_viewport(ui, |ui, viewport| {
-                    ui.set_min_size(vec2(
-                        if wrap {
-                            body.width()
-                        } else {
-                            body.width().max(
-                                prefix
-                                    + visible
-                                        .iter()
-                                        .map(|&i| self.logs.lines[i].raw_length as f32 * char_w)
-                                        .fold(0.0, f32::max)
-                                    + 24.0,
-                            )
-                        },
-                        total,
-                    ));
-                    let origin = ui.min_rect().min;
-                    let first = heights.partition_point(|h| *h < viewport.top()).saturating_sub(2);
-                    let last = heights
-                        .partition_point(|h| *h < viewport.bottom() + 40.0)
-                        .min(visible.len());
-                    let selection = ui.visuals().selection;
-                    for shown in first..last {
-                        let index = visible[shown];
-                        let line = &self.logs.lines[index];
-                        let y = origin.y + heights[shown];
-                        let parts = if formatted && !line.system {
-                            self.logs
-                                .cache
-                                .entry(line.text.clone())
-                                .or_insert_with(|| parse(&line.text))
-                                .clone()
-                        } else {
-                            vec![Part {
-                                text: line.text.clone(),
-                                tone: if line.system { Tone::Muted } else { Tone::Text },
-                            }]
-                        };
-                        let job = log_job(
-                            &parts,
-                            &self.logs.filter,
-                            t,
-                            if wrap { text_width } else { f32::INFINITY },
-                        );
-                        let mut galley = ui.painter().layout_job(job);
-                        let h = galley.size().y;
-                        if line.layout.is_none_or(|(key, height)| key != layout_key || height != h) {
-                            measured_heights.push((index, h));
-                        }
-                        let leading = galley
-                            .rows
-                            .first()
-                            .and_then(|r| r.glyphs.first())
-                            .map_or(0.0, |glyph| (glyph.line_height - glyph.font_height).max(0.0) / 2.0);
-                        let text_pos = pos2(origin.x + prefix, y + leading);
-                        let selected = self.logs.all_selected;
-                        if selected {
-                            // The drag-selection look, carried across the timestamp and source
-                            // columns of the first row.
-                            if let Some(row) = galley.rows.first() {
-                                let row = row.rect().translate(text_pos.to_vec2());
-                                ui.painter().rect_filled(
-                                    Rect::from_x_y_ranges(origin.x + 24.0..=text_pos.x, row.y_range()),
-                                    0.0,
-                                    selection.bg_fill,
-                                );
-                            }
-                            let all = text_selection::CCursorRange::select_all(&galley);
-                            text_selection::visuals::paint_text_selection(&mut galley, ui.visuals(), &all, None);
-                        }
-                        let mut x = origin.x + 24.0;
-                        if self.prefs.timestamps {
-                            let timestamp = line.ts.as_deref().map(log_time).unwrap_or_default();
-                            let color = if selected { selection.stroke.color } else { t.faint };
-                            label(ui, rect(x, y, 12.0 * char_w, 19.0), &timestamp, 12.0, "mono", color);
-                            x += 12.0 * char_w + 12.0;
-                        }
-                        if multiple {
-                            label(
-                                ui,
-                                rect(x, y, 150.0, 19.0),
-                                source_label(&self.logs.sources, &labels, line.source),
-                                12.0,
-                                "mono",
-                                if selected {
-                                    selection.stroke.color
-                                } else {
-                                    hex(["#4f9cf9", "#e5a03c", "#3cc97c", "#c47cf0", "#f06f8a", "#3cc3c9"]
-                                        [line.source % 6])
-                                },
-                            );
-                        }
-                        // A pre-laid-out galley keeps every message left-aligned. `put`
-                        // centers a LayoutJob in its cell, including each wrapped row.
-                        ui.place(
-                            Rect::from_min_size(text_pos, galley.size()),
-                            Label::new(galley).selectable(true).show_tooltip_when_elided(false),
-                        );
-                    }
-                });
-            at_bottom = scroll.state.clamped_offset().y + body.height() >= total - 24.0;
-        });
-        if !measured_heights.is_empty() {
-            for (index, height) in measured_heights {
-                self.logs.lines[index].layout = Some((layout_key, height));
-            }
-            ui.ctx().request_repaint();
-        }
-        self.logs.follow = at_bottom;
-        if !self.logs.follow && !visible.is_empty() {
+        self.logs.show(ui, body, &visible, &view, keyboard_free, t);
+        if !self.logs.follow && !self.logs.selecting && !visible.is_empty() {
             let rr = rect(body.right() - 110.0, body.bottom() - 52.0, 78.0, 28.8);
             if button(
                 ui,
@@ -776,5 +1008,123 @@ mod tests {
             state.plain_text(&[1, 2], true, Some(&labels)),
             format!("{time} 2 second\n2 api-2/app: log stream ended")
         );
+    }
+    #[test]
+    fn a_selection_copies_what_the_panel_shows() {
+        let parts = parse(r#"{"level":"warn","message":"hello","code":42}"#);
+        // Shown as "WARN hello code=42", with gaps instead of spaces.
+        assert_eq!(slice(&parts, 0..16), "WARN hello code=42");
+        assert_eq!(slice(&parts, 2..7), "RN hel");
+        assert_eq!(slice(&parts, 4..9), "hello");
+        let mut state = State::default();
+        for text in ["first line", r#"{"msg":"second"}"#, "third line"] {
+            state.push(Line::new(0, None, text.into(), false));
+        }
+        // Dragged upward, from inside the third line to inside the first.
+        let selection = Selection {
+            anchor: Point { line: 2, char: 5 },
+            head: Point { line: 0, char: 6 },
+            formatted: true,
+        };
+        assert_eq!(selection.range(1, 6), Some(0..6));
+        assert_eq!(selection.range(3, 6), None);
+        assert_eq!(state.selected_text(&[0, 1, 2], selection), "line\nsecond\nthird");
+        // Lines the filter hides are not copied.
+        assert_eq!(state.selected_text(&[0, 2], selection), "line\nthird");
+        let raw = Selection {
+            formatted: false,
+            ..selection
+        };
+        assert_eq!(
+            state.selected_text(&[0, 1, 2], raw),
+            "line\n{\"msg\":\"second\"}\nthird"
+        );
+    }
+    #[test]
+    fn a_drag_copies_the_lines_it_selected_while_logs_stream() {
+        let ctx = Context::default();
+        install_fonts(&ctx);
+        let t = Tokens::new(true);
+        t.apply(&ctx, model::Theme::Dark);
+        let body = rect(0.0, 0.0, 600.0, 200.0);
+        let mut state = State {
+            follow: true,
+            ..Default::default()
+        };
+        let stream = |state: &mut State, count: usize| {
+            for _ in 0..count {
+                let n = state.next_id;
+                state.push(Line::new(0, None, format!("line {n:03}"), false));
+            }
+        };
+        let clock = std::cell::Cell::new(0.0);
+        let run = |state: &mut State, events: Vec<Event>| {
+            clock.set(clock.get() + 1.0 / 60.0);
+            let visible: Vec<_> = (0..state.lines.len()).collect();
+            let view = View {
+                timestamps: false,
+                wrap: true,
+                formatted: true,
+                labels: None,
+            };
+            let mut output = ctx.run_ui(
+                RawInput {
+                    screen_rect: Some(body),
+                    time: Some(clock.get()),
+                    events,
+                    ..Default::default()
+                },
+                |ui| state.show(ui, body, &visible, &view, true, t),
+            );
+            output.textures_delta.clear();
+            output.platform_output.commands.into_iter().find_map(|c| match c {
+                OutputCommand::CopyText(text) => Some(text),
+                _ => None,
+            })
+        };
+        let press = |pos: Pos2, pressed: bool| Event::PointerButton {
+            pos,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        };
+        stream(&mut state, 100);
+        for _ in 0..3 {
+            run(&mut state, vec![]);
+        }
+        // Following, 100 lines of 19 points end at the bottom of the 200-point body,
+        // so lines 92 and 94 sit at 57 and 95.
+        let (from, to) = (pos2(5.0, 57.0), pos2(590.0, 95.0));
+        stream(&mut state, 1);
+        run(&mut state, vec![Event::PointerMoved(from), press(from, true)]);
+        for step in 1..=4 {
+            stream(&mut state, 1);
+            run(&mut state, vec![Event::PointerMoved(from.lerp(to, step as f32 / 4.0))]);
+        }
+        stream(&mut state, 1);
+        run(&mut state, vec![press(to, false)]);
+        // The selection outlives its lines leaving the screen.
+        state.follow = true;
+        for _ in 0..5 {
+            stream(&mut state, 10);
+            run(&mut state, vec![]);
+        }
+        assert_eq!(
+            run(&mut state, vec![Event::Copy]).as_deref(),
+            Some("line 092\nline 093\nline 094")
+        );
+        // A triple click selects the whole line, a double click a word.
+        let word = pos2(30.0, 57.0);
+        let mut clicks = |count| {
+            clock.set(clock.get() + 1.0);
+            for _ in 0..count {
+                run(&mut state, vec![Event::PointerMoved(word), press(word, true)]);
+                run(&mut state, vec![press(word, false)]);
+            }
+            run(&mut state, vec![Event::Copy]).unwrap_or_default()
+        };
+        let line = clicks(3);
+        assert!(line.starts_with("line ") && line.len() == 8, "{line}");
+        assert_eq!(clicks(2), "line");
     }
 }

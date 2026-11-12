@@ -26,7 +26,8 @@ logs and container terminals run in the same native process.
   usage is missing.
 - **Logs.** Follows every container of every pod of a workload at once and picks up new pods
   during a rollout. JSON lines are shown as level, message and coloured fields; plain lines get
-  their level word coloured. Filter, timestamps, wrapping.
+  their level word coloured. Filter, timestamps, wrapping. Select text with the mouse, or every
+  line with ⌘A, and copy it.
 - **Shells.** Interactive terminals into containers, docked under the current view so they keep
   running while you browse.
 - **Edit and delete, never create.** The YAML tab saves over the object it opened, like
