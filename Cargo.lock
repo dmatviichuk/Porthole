@@ -3494,7 +3494,7 @@ dependencies = [
 
 [[package]]
 name = "porthole"
-version = "2.2.1"
+version = "2.2.2"
 dependencies = [
  "arboard",
  "chrono",
@@ -3524,7 +3524,7 @@ dependencies = [
 
 [[package]]
 name = "porthole-kubernetes"
-version = "2.2.1"
+version = "2.2.2"
 dependencies = [
  "directories",
  "futures",
@@ -5690,7 +5690,7 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xtask"
-version = "2.2.1"
+version = "2.2.2"
 dependencies = [
  "egui_extras",
  "image",
