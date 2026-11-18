@@ -1371,6 +1371,15 @@ mod regression_tests {
     }
 
     #[test]
+    fn copies_reach_the_system_clipboard() {
+        // Without eframe's `clipboard` feature, egui-winit keeps copied text to
+        // itself. The workspace turns eframe's default features off.
+        let manifest = include_str!("../../../../Cargo.toml");
+        let eframe = manifest.lines().find(|l| l.starts_with("eframe =")).unwrap();
+        assert!(eframe.contains(r#""clipboard""#), "{eframe}");
+    }
+
+    #[test]
     fn container_log_action_retains_the_selected_container() {
         let mut row = table::Row::new(model::resource("Pod"), two_container_pod());
         for container in [None, Some("application"), Some("sidecar")] {

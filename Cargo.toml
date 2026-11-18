@@ -12,7 +12,7 @@ authors = ["Dmytro Matviichuk"]
 repository = "https://github.com/dmatviichuk/Porthole"
 
 [workspace.dependencies]
-eframe = { version = "0.37.0", default-features = false, features = ["glow", "default_fonts", "persistence", "accesskit", "x11", "wayland"] }
+eframe = { version = "0.37.0", default-features = false, features = ["glow", "default_fonts", "clipboard", "persistence", "accesskit", "x11", "wayland"] }
 egui_extras = { version = "0.37.0", features = ["svg"] }
 font-kit = "0.14.3"
 ttf-parser = "0.25.1"
